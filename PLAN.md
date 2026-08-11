@@ -131,6 +131,11 @@ basil" — and never blocks anything), `cook_sessions` + lines, `llm_jobs`
 2. **Deterministic pass, no network:** detect store, segment lines, drop junk
    (SUBTOTAL/TAX/loyalty rows), look up each line in `aliases` — hits resolve
    instantly with pre-filled quantities.
+   - The Paperless tag covers *all* receipts, not just groceries. Stores carry
+     a `non_grocery` flag: dismissing a receipt from a store once ("not
+     groceries") sets it, and future receipts from that store auto-skip
+     without review or LLM calls. Unknown stores get a cheap "is this
+     groceries at all?" triage at the start of the LLM pass.
 3. Unmatched lines go to **one** LLM job for the whole receipt (batched, with
    store context — better results and politer to forte than per-line calls).
    gpt-oss:20b, structured output. All LLM output lands as *proposed*, never

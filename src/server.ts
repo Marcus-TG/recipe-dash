@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import Fastify from 'fastify'
+import multipart from '@fastify/multipart'
 import fastifyStatic from '@fastify/static'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
@@ -9,18 +10,24 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod'
+import { config } from './config.js'
+import { cookRoutes } from './routes/cook.js'
 import { healthRoutes } from './routes/health.js'
+import { itemRoutes } from './routes/items.js'
+import { receiptRoutes } from './routes/receipts.js'
+import { recipeRoutes } from './routes/recipes.js'
 import { version } from './version.js'
 
 export async function buildServer() {
   const app = Fastify({
-    logger: {
-      level: process.env.LOG_LEVEL ?? 'info',
-    },
+    logger: { level: process.env.LOG_LEVEL ?? 'info' },
+    bodyLimit: 25 * 1024 * 1024,
   })
 
   app.setValidatorCompiler(validatorCompiler)
   app.setSerializerCompiler(serializerCompiler)
+
+  await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } })
 
   // OpenAPI is generated from the same Zod schemas that validate requests —
   // /api/docs is the integration contract for n8n and the dashboard.
@@ -37,15 +44,31 @@ export async function buildServer() {
   })
   await app.register(swaggerUi, { routePrefix: '/api/docs' })
 
-  await app.register(healthRoutes, { prefix: '/api' })
+  await app.register(
+    async (api) => {
+      await api.register(healthRoutes)
+      await api.register(itemRoutes)
+      await api.register(receiptRoutes)
+      await api.register(recipeRoutes)
+      await api.register(cookRoutes)
+    },
+    { prefix: '/api' },
+  )
 
-  // Serve the built PWA when it exists (production image); in dev the web app
+  // Uploaded recipe photos
+  const uploads = path.join(config.DATA_DIR, 'uploads')
+  fs.mkdirSync(uploads, { recursive: true })
+  await app.register(fastifyStatic, {
+    root: uploads,
+    prefix: '/uploads/',
+    decorateReply: false,
+  })
+
+  // Serve the built web app when it exists (production image); in dev the UI
   // runs on Vite's dev server and proxies /api here instead.
   const webDir = path.join(process.cwd(), 'dist', 'web')
   if (fs.existsSync(webDir)) {
     await app.register(fastifyStatic, { root: webDir })
-    // SPA fallback: unknown non-API paths get index.html so client-side
-    // routing works after a page refresh.
     app.setNotFoundHandler((req, reply) => {
       if (req.url.startsWith('/api')) {
         return reply.code(404).send({ message: 'Not found' })
