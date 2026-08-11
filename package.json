@@ -1,0 +1,46 @@
+{
+  "name": "recipe-dash",
+  "version": "0.1.0",
+  "description": "Larder — self-hosted recipe app where the pantry is real",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "dev:web": "vite",
+    "build": "vite build && tsc -p tsconfig.json",
+    "start": "node dist/server/index.js",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "db:generate": "drizzle-kit generate"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Marcus-TG/recipe-dash.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Marcus-TG/recipe-dash/issues"
+  },
+  "homepage": "https://github.com/Marcus-TG/recipe-dash#readme",
+  "dependencies": {
+    "@fastify/static": "^10.1.3",
+    "@fastify/swagger": "^9.8.1",
+    "@fastify/swagger-ui": "^6.1.1",
+    "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.11.3",
+    "fastify-type-provider-zod": "^7.0.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "outDir": "dist/server",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
