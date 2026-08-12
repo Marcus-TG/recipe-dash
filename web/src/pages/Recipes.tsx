@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, post, useFetch } from '../api'
+import { Thumb } from '../components/Thumb'
 import type { Recipe } from '../types'
 
 export function Recipes() {
@@ -181,18 +182,23 @@ export function Recipes() {
 
       {(data ?? []).map((recipe) => (
         <Link className="card" to={`/recipes/${recipe.id}`} key={recipe.id}>
-          <div className="card-title">
-            <span className="grow truncate">{recipe.title}</span>
-            {recipe.status === 'pending_parse' && (
-              <span className="chip">
-                <span className="spinner" /> reading
-              </span>
-            )}
-            {recipe.status === 'parse_failed' && (
-              <span className="chip missing">failed</span>
-            )}
+          <div className="row">
+            <Thumb src={recipe.thumbnail} alt="" />
+            <div className="grow">
+              <div className="card-title">
+                <span className="grow truncate">{recipe.title}</span>
+                {recipe.status === 'pending_parse' && (
+                  <span className="chip">
+                    <span className="spinner" /> reading
+                  </span>
+                )}
+                {recipe.status === 'parse_failed' && (
+                  <span className="chip missing">failed</span>
+                )}
+              </div>
+              {recipe.servings && <p className="sub">serves {recipe.servings}</p>}
+            </div>
           </div>
-          {recipe.servings && <p className="sub">serves {recipe.servings}</p>}
         </Link>
       ))}
     </main>

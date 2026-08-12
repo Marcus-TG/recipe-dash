@@ -218,6 +218,32 @@ a.card:active {
   white-space: nowrap;
 }
 
+/* ---------- thumbnails ---------- */
+
+.thumb {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  color: var(--muted);
+  overflow: hidden;
+}
+
+.hero {
+  width: 100%;
+  max-height: 42vh;
+  object-fit: cover;
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+  display: block;
+  background: var(--surface-2);
+}
+
 /* ---------- chips ---------- */
 
 .chip {

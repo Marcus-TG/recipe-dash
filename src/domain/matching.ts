@@ -26,7 +26,7 @@ export type IngredientCheck = {
 export type RecipeMatch = {
   recipeId: number
   title: string
-  imageUrl: string | null
+  thumbnail: string | null
   verdict: RecipeVerdict
   missing: string[]
   uncertain: string[]
@@ -190,7 +190,7 @@ export function matchRecipes(now = new Date()): RecipeMatch[] {
     return {
       recipeId: recipe.id,
       title: recipe.title,
-      imageUrl: recipe.imageUrl,
+      thumbnail: recipe.imageFile ? `/uploads/${recipe.imageFile}` : null,
       verdict,
       missing: missing.map((c) => c.itemName ?? c.label),
       uncertain: uncertain.map((c) => c.itemName ?? c.label),

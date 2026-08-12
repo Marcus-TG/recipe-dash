@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- A larder jar: warm accent ground so it reads on light and dark tabs. -->
+  <rect width="64" height="64" rx="14" fill="#e8a33d" />
+  <g fill="#17150f">
+    <rect x="22" y="9" width="20" height="7" rx="3" />
+    <path d="M20 20a4 4 0 0 1 4-4h16a4 4 0 0 1 4 4v27a8 8 0 0 1-8 8H28a8 8 0 0 1-8-8V20Z" />
+  </g>
+  <rect x="24" y="30" width="16" height="5" rx="2.5" fill="#e8a33d" opacity="0.85" />
+</svg>

@@ -153,7 +153,10 @@ export const recipes = sqliteTable('recipes', {
     .$type<string[]>(),
   rawSource: text('raw_source'),
   status: text('status').notNull().default('needs_review'), // needs_review|active|archived|pending_parse|parse_failed
-  imageUrl: text('image_url'),
+  imageUrl: text('image_url'), // where it came from
+  // Cached copy in DATA_DIR/uploads. Local so thumbnails survive the source
+  // site changing, hotlink protection, and having no internet.
+  imageFile: text('image_file'),
   createdAt: ts('created_at').notNull().$defaultFn(now),
 })
 

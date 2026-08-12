@@ -70,7 +70,9 @@ export async function buildServer() {
   if (fs.existsSync(webDir)) {
     await app.register(fastifyStatic, { root: webDir })
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api')) {
+      // Only client-side routes fall back to the app shell. An API path or a
+      // missing upload must 404, or a broken image looks like a valid page.
+      if (req.url.startsWith('/api') || req.url.startsWith('/uploads/')) {
         return reply.code(404).send({ message: 'Not found' })
       }
       return reply.sendFile('index.html')

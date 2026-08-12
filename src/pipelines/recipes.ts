@@ -125,7 +125,68 @@ function applyExtraction(recipeId: number, r: ExtractedRecipe, rawSource: string
     .where(eq(recipes.id, recipeId))
     .run()
   saveIngredients(recipeId, r.ingredients)
+  if (r.imageUrl) enqueue('fetch_recipe_image', { recipeId })
 }
+
+// ---------- thumbnails ----------
+
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+const EXT_BY_TYPE: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/avif': 'avif',
+  'image/gif': 'gif',
+}
+
+/**
+ * Cache the recipe's picture locally. A missing thumbnail is cosmetic, so
+ * every failure here is swallowed rather than retried into the ground.
+ */
+registerHandler('fetch_recipe_image', async (payload: { recipeId: number }) => {
+  const recipe = db
+    .select()
+    .from(recipes)
+    .where(eq(recipes.id, payload.recipeId))
+    .get()
+  if (!recipe?.imageUrl || recipe.imageFile) return
+
+  let res: Response
+  try {
+    res = await fetch(recipe.imageUrl, {
+      headers: {
+        'user-agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        accept: 'image/*',
+        // Some CDNs refuse images without the page they belong to.
+        ...(recipe.sourceUrl ? { referer: recipe.sourceUrl } : {}),
+      },
+      signal: AbortSignal.timeout(30_000),
+    })
+  } catch (err) {
+    throw new PermanentJobError(`image fetch failed: ${String(err)}`)
+  }
+  if (!res.ok) throw new PermanentJobError(`image fetch → ${res.status}`)
+
+  const type = (res.headers.get('content-type') ?? '').split(';')[0]!.trim()
+  const ext = EXT_BY_TYPE[type]
+  if (!ext) throw new PermanentJobError(`not an image: ${type}`)
+
+  const buffer = Buffer.from(await res.arrayBuffer())
+  if (buffer.byteLength > MAX_IMAGE_BYTES) {
+    throw new PermanentJobError(`image too big: ${buffer.byteLength} bytes`)
+  }
+
+  const uploads = path.join(config.DATA_DIR, 'uploads')
+  fs.mkdirSync(uploads, { recursive: true })
+  const filename = `recipe-${recipe.id}.${ext}`
+  fs.writeFileSync(path.join(uploads, filename), buffer)
+  db.update(recipes)
+    .set({ imageFile: filename })
+    .where(eq(recipes.id, recipe.id))
+    .run()
+})
 
 // ---------- URL path: schema.org JSON-LD first ----------
 
@@ -510,6 +571,8 @@ export function importRecipeFromPhoto(buffer: Buffer, filename: string) {
       title: 'Photo recipe (reading…)',
       sourceType: 'photo',
       sourceImagePath: safe,
+      // The photo you took IS the thumbnail.
+      imageFile: safe,
       status: 'pending_parse',
     })
     .returning()

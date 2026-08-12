@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useFetch } from '../api'
+import { Thumb } from '../components/Thumb'
 import type { RecipeMatch } from '../types'
 
 const HEADINGS: Record<RecipeMatch['verdict'], string> = {
@@ -13,15 +14,20 @@ const HEADINGS: Record<RecipeMatch['verdict'], string> = {
 function MatchCard({ match }: { match: RecipeMatch }) {
   return (
     <Link className="card" to={`/recipes/${match.recipeId}`}>
-      <div className="card-title">
-        <span className="grow">{match.title}</span>
-        <span className={`chip ${match.verdict}`}>
-          {match.verdict === 'cookable'
-            ? 'ready'
-            : match.verdict === 'check_shelf'
-              ? 'check'
-              : `${match.missing.length} short`}
-        </span>
+      <div className="row">
+        <Thumb src={match.thumbnail} alt="" />
+        <div className="grow">
+          <div className="card-title">
+            <span className="grow">{match.title}</span>
+            <span className={`chip ${match.verdict}`}>
+              {match.verdict === 'cookable'
+                ? 'ready'
+                : match.verdict === 'check_shelf'
+                  ? 'check'
+                  : `${match.missing.length} short`}
+            </span>
+          </div>
+        </div>
       </div>
       {match.usesUp.length > 0 && (
         <div style={{ marginTop: '0.5rem' }}>

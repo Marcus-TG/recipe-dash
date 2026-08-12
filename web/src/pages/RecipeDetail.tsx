@@ -93,6 +93,9 @@ export function RecipeDetail() {
       <Link className="back" to="/recipes">
         ‹ Recipes
       </Link>
+      {recipe.thumbnail && (
+        <img className="hero" src={recipe.thumbnail} alt="" loading="lazy" />
+      )}
       <div className="page-head">
         <div>
           <h1>{recipe.title}</h1>

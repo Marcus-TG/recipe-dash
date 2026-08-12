@@ -22,6 +22,7 @@ import {
   importRecipeFromUrl,
 } from '../pipelines/recipes.js'
 import { LlmUnavailableError } from '../services/ollama.js'
+import { enqueue } from '../services/jobs.js'
 
 export async function recipeRoutes(app: FastifyInstance) {
   const r = app.withTypeProvider<ZodTypeProvider>()
@@ -39,6 +40,26 @@ export async function recipeRoutes(app: FastifyInstance) {
   })
 
   r.route({
+    method: 'POST',
+    url: '/admin/fetch-thumbnails',
+    schema: {
+      description:
+        'Queue thumbnail downloads for any recipe that has a picture but no cached copy ' +
+        '(backfill for recipes imported before thumbnails existed).',
+      tags: ['system'],
+    },
+    handler: async () => {
+      const missing = db
+        .select()
+        .from(recipes)
+        .all()
+        .filter((rec) => rec.imageUrl && !rec.imageFile)
+      for (const rec of missing) enqueue('fetch_recipe_image', { recipeId: rec.id })
+      return { queued: missing.length }
+    },
+  })
+
+  r.route({
     method: 'GET',
     url: '/recipes',
     schema: { description: 'All recipes.', tags: ['recipes'] },
@@ -47,6 +68,7 @@ export async function recipeRoutes(app: FastifyInstance) {
       const queued = db.select().from(llmJobs).where(eq(llmJobs.status, 'queued')).all()
       return rows.map((rec) => ({
         ...rec,
+        thumbnail: rec.imageFile ? `/uploads/${rec.imageFile}` : null,
         awaitingParse:
           rec.status === 'pending_parse' &&
           queued.some((j) => (j.payload as any)?.recipeId === rec.id),
@@ -74,7 +96,10 @@ export async function recipeRoutes(app: FastifyInstance) {
       const itemById = new Map(db.select().from(items).all().map((i) => [i.id, i]))
       const match = matchRecipes().find((m) => m.recipeId === recipe.id) ?? null
       return {
-        recipe,
+        recipe: {
+          ...recipe,
+          thumbnail: recipe.imageFile ? `/uploads/${recipe.imageFile}` : null,
+        },
         match,
         ingredients: ings.map((i) => ({
           ...i,

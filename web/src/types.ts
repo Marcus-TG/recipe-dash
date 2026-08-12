@@ -72,7 +72,7 @@ export type IngredientCheck = {
 export type RecipeMatch = {
   recipeId: number
   title: string
-  imageUrl: string | null
+  thumbnail: string | null
   verdict: 'cookable' | 'check_shelf' | 'almost' | 'not_tonight'
   missing: string[]
   uncertain: string[]
@@ -90,6 +90,7 @@ export type Recipe = {
   instructions: string[]
   status: string
   imageUrl: string | null
+  thumbnail: string | null
   awaitingParse?: boolean
 }
 
