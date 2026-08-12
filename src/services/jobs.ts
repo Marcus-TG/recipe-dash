@@ -7,6 +7,7 @@ export type JobKind =
   | 'parse_receipt_lines'
   | 'parse_recipe_url'
   | 'parse_recipe_photo'
+  | 'parse_recipe_text'
   | 'resolve_ingredients'
 
 type Handler = (payload: any) => Promise<void>

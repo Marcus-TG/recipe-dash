@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { del, patch, useFetch } from '../api'
+import { RecipeChat } from '../components/RecipeChat'
 import type { IngredientCheck, Recipe, RecipeIngredient, RecipeMatch } from '../types'
 
 type Payload = {
@@ -192,6 +193,8 @@ export function RecipeDetail() {
           </div>
         </section>
       )}
+
+      <RecipeChat recipeId={recipe.id} onRevised={reload} />
 
       <button className="btn ghost danger block" onClick={() => void remove()}>
         Delete recipe

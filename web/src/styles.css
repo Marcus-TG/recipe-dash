@@ -368,6 +368,16 @@ select {
   background: var(--surface-2);
 }
 
+textarea {
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  resize: vertical;
+  line-height: 1.4;
+}
+
 label {
   display: block;
   font-size: 0.85rem;

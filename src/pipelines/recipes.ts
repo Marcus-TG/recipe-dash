@@ -239,6 +239,18 @@ const LlmRecipe = z.object({
   instructions: z.array(z.string()).describe('one step each'),
 })
 
+// Shared instruction for every "read a recipe out of messy input" path.
+// The debloating is the point: recipe pages are 90% story and ads.
+const EXTRACT_SYSTEM =
+  'You extract the actual recipe from messy text and throw away everything else. ' +
+  'Discard the blog story, the SEO padding, ads, cookie notices, navigation, ' +
+  'author bios, comments, ratings, nutrition tables, "jump to recipe" links and ' +
+  'related-recipe lists. ' +
+  'Keep ingredient lines verbatim including their amounts. ' +
+  'Keep the method as discrete steps, trimmed to the actual instruction — ' +
+  'no chatter, but never drop a temperature, time, or quantity. ' +
+  'If the text contains no recipe at all, return an empty ingredients array.'
+
 export async function importRecipeFromUrl(url: string) {
   const recipe = db
     .insert(recipes)
@@ -282,9 +294,7 @@ registerHandler('parse_recipe_url', async (payload: { recipeId: number; url: str
   const text = stripHtml(html).slice(0, 16_000)
   const parsed = await structured({
     schema: LlmRecipe,
-    system:
-      'You extract recipes from web page text. Return the ingredient lines verbatim ' +
-      '(including amounts) and the method as discrete steps. Ignore navigation, ads and comments.',
+    system: EXTRACT_SYSTEM,
     user: text,
   })
   applyExtraction(
@@ -298,6 +308,192 @@ registerHandler('parse_recipe_url', async (payload: { recipeId: number; url: str
     text.slice(0, 20_000),
   )
 })
+
+// ---------- paste path: for sites that refuse to be read ----------
+
+/**
+ * Plenty of recipe sites return 403 to anything that isn't a browser
+ * (simplyrecipes, allrecipes, seriouseats). Selecting the page and pasting it
+ * here goes through the same extraction, so the fluff still gets stripped.
+ */
+export function importRecipeFromText(text: string, sourceUrl?: string | null) {
+  const recipe = db
+    .insert(recipes)
+    .values({
+      title: 'Pasted recipe (reading…)',
+      sourceType: 'text',
+      sourceUrl: sourceUrl ?? null,
+      status: 'pending_parse',
+      rawSource: text.slice(0, 50_000),
+    })
+    .returning()
+    .get()
+  enqueue('parse_recipe_text', { recipeId: recipe.id })
+  return recipe
+}
+
+registerHandler('parse_recipe_text', async (payload: { recipeId: number }) => {
+  const recipe = db
+    .select()
+    .from(recipes)
+    .where(eq(recipes.id, payload.recipeId))
+    .get()
+  if (!recipe?.rawSource) return
+  const parsed = await structured({
+    schema: LlmRecipe,
+    system: EXTRACT_SYSTEM,
+    user: recipe.rawSource.slice(0, 16_000),
+  })
+  if (parsed.ingredients.length === 0) {
+    db.update(recipes)
+      .set({ status: 'parse_failed', title: 'No recipe found in that text' })
+      .where(eq(recipes.id, recipe.id))
+      .run()
+    throw new PermanentJobError('no recipe found in pasted text')
+  }
+  applyExtraction(
+    recipe.id,
+    {
+      title: parsed.title,
+      servings: parsed.servings > 0 ? parsed.servings : null,
+      ingredients: parsed.ingredients,
+      instructions: parsed.instructions,
+    },
+    recipe.rawSource,
+  )
+})
+
+// ---------- talking to the model about a recipe ----------
+
+// Two calls, each with one job. Asking a single call to both answer in prose
+// AND emit a structured recipe reliably produced neither: the model wrote the
+// revised ingredients into the prose field and left the structured arrays
+// empty, so there was nothing to apply.
+const ChatIntent = z.object({
+  wants_modification: z
+    .boolean()
+    .describe('true if the cook wants the recipe itself changed, not just a question answered'),
+  reply: z
+    .string()
+    .describe(
+      'answer the question in at most 3 sentences. If wants_modification is true, ' +
+        'just say what you changed in ONE sentence — never list ingredients here.',
+    ),
+})
+
+export type ChatTurn = { role: 'user' | 'assistant'; content: string }
+
+/** Keep the model's sentence if it stayed brief; otherwise say it ourselves. */
+function shortIntro(reply: string): string {
+  const firstLine = reply.split('\n')[0]!.trim()
+  const clean = firstLine.replace(/[*_`#]/g, '').trim()
+  const looksLikeAList = /^[-•\d]/.test(clean) || clean.endsWith(':')
+  if (clean.length > 0 && clean.length <= 160 && !looksLikeAList) return clean
+  return 'Here’s a revised version — have a look below.'
+}
+
+/**
+ * Ask about substitutions, scaling, technique — and optionally get back a
+ * complete revised recipe to apply. The pantry goes into the prompt, so
+ * "what can I swap this for?" has a useful answer.
+ */
+export async function chatAboutRecipe(
+  recipeId: number,
+  message: string,
+  history: ChatTurn[],
+) {
+  const recipe = db.select().from(recipes).where(eq(recipes.id, recipeId)).get()
+  if (!recipe) throw new Error('recipe not found')
+  const ings = db
+    .select()
+    .from(recipeIngredients)
+    .where(eq(recipeIngredients.recipeId, recipeId))
+    .all()
+  const pantry = db.select().from(items).all()
+
+  const recipeContext =
+    `RECIPE: ${recipe.title}\n` +
+    `Serves: ${recipe.servings ?? 'unstated'}\n\n` +
+    `Ingredients:\n${ings.map((i) => `- ${i.rawText}`).join('\n')}\n\n` +
+    `Method:\n${recipe.instructions.map((s, n) => `${n + 1}. ${s}`).join('\n')}\n\n`
+
+  const intent = await structured({
+    schema: ChatIntent,
+    timeoutMs: 240_000,
+    system:
+      'You are helping someone cook in their own kitchen, from their own recipe. ' +
+      'Be concise and practical — no preamble, no restating the question. ' +
+      'When they ask about substitutions, prefer things from their pantry list. ' +
+      'Set wants_modification=true only when they want the recipe itself changed ' +
+      '(scale it, swap an ingredient, make it vegetarian, simplify it).',
+    user:
+      recipeContext +
+      `THEIR PANTRY: ${pantry.map((i) => i.name).join(', ') || '(empty)'}\n\n` +
+      (history.length
+        ? `EARLIER IN THIS CONVERSATION:\n${history
+            .slice(-6)
+            .map((t) => `${t.role === 'user' ? 'Cook' : 'You'}: ${t.content}`)
+            .join('\n')}\n\n`
+        : '') +
+      `COOK ASKS: ${message}`,
+  })
+
+  if (!intent.wants_modification) {
+    return { reply: intent.reply, proposal: null }
+  }
+
+  // Second call does nothing but rewrite the recipe.
+  const revised = await structured({
+    schema: LlmRecipe,
+    timeoutMs: 240_000,
+    system:
+      'You revise recipes. Apply the requested change and return the COMPLETE recipe — ' +
+      'every ingredient and every step, including the ones that did not change. ' +
+      'Keep ingredient lines in the same "amount unit ingredient" style as the original. ' +
+      'Scale amounts accurately and adjust any amounts mentioned inside the steps too.',
+    user: recipeContext + `CHANGE REQUESTED: ${message}`,
+  })
+
+  if (revised.ingredients.length === 0) {
+    return { reply: intent.reply, proposal: null }
+  }
+
+  return {
+    // The proposal card below already shows the full revision, so the chat
+    // bubble stays a one-liner. Models ignore "don't list the ingredients"
+    // often enough that this is enforced here rather than asked for.
+    reply: shortIntro(intent.reply),
+    proposal: {
+      title: revised.title || recipe.title,
+      servings: revised.servings > 0 ? revised.servings : recipe.servings,
+      ingredients: revised.ingredients,
+      instructions: revised.instructions.length
+        ? revised.instructions
+        : recipe.instructions,
+    },
+  }
+}
+
+/** Apply a proposed revision in place; ingredients re-resolve to the pantry. */
+export function applyRecipeRevision(
+  recipeId: number,
+  revision: {
+    title: string
+    servings: number | null
+    ingredients: string[]
+    instructions: string[]
+  },
+) {
+  db.update(recipes)
+    .set({
+      title: revision.title,
+      servings: revision.servings,
+      instructions: revision.instructions,
+    })
+    .where(eq(recipes.id, recipeId))
+    .run()
+  saveIngredients(recipeId, revision.ingredients)
+}
 
 // ---------- photo path: the vision model ----------
 

@@ -7,7 +7,14 @@ import { items, llmJobs, recipeIngredients, recipes } from '../db/schema.js'
 import { matchRecipes } from '../domain/matching.js'
 import { findOrCreateItem, upsertAlias } from '../domain/resolve.js'
 import { normalizeItemName } from '../domain/text.js'
-import { importRecipeFromPhoto, importRecipeFromUrl } from '../pipelines/recipes.js'
+import {
+  applyRecipeRevision,
+  chatAboutRecipe,
+  importRecipeFromPhoto,
+  importRecipeFromText,
+  importRecipeFromUrl,
+} from '../pipelines/recipes.js'
+import { LlmUnavailableError } from '../services/ollama.js'
 
 export async function recipeRoutes(app: FastifyInstance) {
   const r = app.withTypeProvider<ZodTypeProvider>()
@@ -81,6 +88,89 @@ export async function recipeRoutes(app: FastifyInstance) {
       body: z.object({ url: z.string().url() }),
     },
     handler: async (req) => importRecipeFromUrl(req.body.url),
+  })
+
+  r.route({
+    method: 'POST',
+    url: '/recipes/import-text',
+    schema: {
+      description:
+        'Import from pasted text — for sites that block scraping. The model strips the ' +
+        'blog story, ads and padding and keeps just the recipe.',
+      tags: ['recipes'],
+      body: z.object({
+        text: z.string().min(20),
+        sourceUrl: z.string().nullish(),
+      }),
+    },
+    handler: async (req) =>
+      importRecipeFromText(req.body.text, req.body.sourceUrl),
+  })
+
+  r.route({
+    method: 'POST',
+    url: '/recipes/:id/chat',
+    schema: {
+      description:
+        'Ask about substitutions, scaling or technique. Answers use your pantry for ' +
+        'context, and may come back with a complete revised recipe you can apply.',
+      tags: ['recipes'],
+      params: z.object({ id: z.coerce.number() }),
+      body: z.object({
+        message: z.string().min(1),
+        history: z
+          .array(
+            z.object({
+              role: z.enum(['user', 'assistant']),
+              content: z.string(),
+            }),
+          )
+          .default([]),
+      }),
+    },
+    handler: async (req, reply) => {
+      try {
+        return await chatAboutRecipe(
+          req.params.id,
+          req.body.message,
+          req.body.history,
+        )
+      } catch (err) {
+        if (err instanceof LlmUnavailableError) {
+          return reply.code(503).send({
+            message: 'forte is not answering right now — try again when it is awake.',
+          })
+        }
+        throw err
+      }
+    },
+  })
+
+  r.route({
+    method: 'POST',
+    url: '/recipes/:id/revise',
+    schema: {
+      description:
+        'Apply a revision (usually one the chat proposed). Ingredients are re-matched ' +
+        'to the pantry afterwards.',
+      tags: ['recipes'],
+      params: z.object({ id: z.coerce.number() }),
+      body: z.object({
+        title: z.string(),
+        servings: z.number().nullish(),
+        ingredients: z.array(z.string()).min(1),
+        instructions: z.array(z.string()),
+      }),
+    },
+    handler: async (req) => {
+      applyRecipeRevision(req.params.id, {
+        title: req.body.title,
+        servings: req.body.servings ?? null,
+        ingredients: req.body.ingredients,
+        instructions: req.body.instructions,
+      })
+      return { ok: true }
+    },
   })
 
   r.route({

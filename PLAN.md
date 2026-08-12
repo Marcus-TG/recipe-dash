@@ -159,7 +159,18 @@ concrete.
 **URL:** fetch page → schema.org/Recipe JSON-LD (covers the vast majority of
 recipe sites; no heavyweight scraper dependency) → microdata fallback → LLM
 fallback on the readable text. **Photo:** upload → Qwen VL with a structured
-schema → same review screen.
+schema → same review screen. **Paste:** many sites (simplyrecipes,
+allrecipes, seriouseats) return 403 to anything that isn't a real browser, so
+pasted page text goes through the same extraction — which doubles as the
+debloater, since the prompt discards the story, ads, nutrition and comments.
+
+**Chat:** each recipe has an ask box for substitutions, scaling, and
+technique, with the pantry in the prompt so "what can I swap?" has a useful
+answer. Requests to change the recipe come back as a complete proposed
+revision you can apply in one tap; applying re-resolves the ingredients
+against the pantry. Deliberately two LLM calls — intent/answer first, then a
+rewrite — because one call asked to do both wrote the revision into the prose
+and left the structured fields empty.
 
 Ingredient lines resolve through a ladder, cheapest first: deterministic
 qty/unit parse → ingredient-alias lookup → normalized name match → embedding
