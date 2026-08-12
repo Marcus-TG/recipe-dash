@@ -94,123 +94,138 @@ export function RecipeDetail() {
       <Link className="back" to="/recipes">
         ‹ Recipes
       </Link>
-      <RecipeImage
-        recipeId={recipe.id}
-        thumbnail={recipe.thumbnail}
-        onChanged={reload}
-      />
-
-      <div className="page-head">
+      {/* On desktop this splits: picture on the left, title and actions right.
+          With no picture there's nothing to put in the left column, so it
+          stays a single stack. */}
+      <div className={`detail-head${recipe.thumbnail ? ' has-photo' : ''}`}>
         <div>
-          <h1>{recipe.title}</h1>
-          <p className="sub">
-            {recipe.servings ? `serves ${recipe.servings} · ` : ''}
-            {recipe.sourceUrl && (
-              <a href={recipe.sourceUrl} target="_blank" rel="noreferrer">
-                source ›
-              </a>
-            )}
-          </p>
+          <RecipeImage
+            recipeId={recipe.id}
+            thumbnail={recipe.thumbnail}
+            onChanged={reload}
+          />
         </div>
-      </div>
 
-      {match && (
-        <div className="card">
-          <div className="row-between">
-            <span className={`chip ${match.verdict}`}>
-              {match.verdict === 'cookable'
-                ? 'You can make this now'
-                : match.verdict === 'check_shelf'
-                  ? 'Probably — check the shelf'
-                  : `${match.missing.length} thing${match.missing.length === 1 ? '' : 's'} short`}
-            </span>
-            {match.usesUp.length > 0 && (
-              <span className="chip uses-up">uses up {match.usesUp.join(', ')}</span>
-            )}
+        <div>
+          <div className="page-head">
+            <div>
+              <h1>{recipe.title}</h1>
+              <p className="sub">
+                {recipe.servings ? `serves ${recipe.servings} · ` : ''}
+                {recipe.sourceUrl && (
+                  <a href={recipe.sourceUrl} target="_blank" rel="noreferrer">
+                    source ›
+                  </a>
+                )}
+              </p>
+            </div>
           </div>
-        </div>
-      )}
 
-      <button
-        className="btn primary block"
-        onClick={() => navigate(`/recipes/${recipe.id}/cook`)}
-      >
-        Start cooking
-      </button>
-
-      <section className="section">
-        <div className="section-label">Ingredients</div>
-        {ingredients.map((ing) => {
-          const check = checkByIngredient.get(ing.id)
-          return (
-            <div className="card" key={ing.id}>
+          {match && (
+            <div className="card">
               <div className="row-between">
-                <span className="grow">{ing.rawText}</span>
-                {check && (
-                  <span className={`chip ${check.verdict}`}>
-                    {VERDICT_WORDS[check.verdict]}
+                <span className={`chip ${match.verdict}`}>
+                  {match.verdict === 'cookable'
+                    ? 'You can make this now'
+                    : match.verdict === 'check_shelf'
+                      ? 'Probably — check the shelf'
+                      : `${match.missing.length} thing${match.missing.length === 1 ? '' : 's'} short`}
+                </span>
+                {match.usesUp.length > 0 && (
+                  <span className="chip uses-up">
+                    uses up {match.usesUp.join(', ')}
                   </span>
                 )}
               </div>
-              {check?.detail && <p className="sub">{check.detail}</p>}
-
-              {fixing === ing.id ? (
-                <div style={{ marginTop: '0.6rem' }}>
-                  <div className="field">
-                    <label>Which pantry item is this?</label>
-                    <input
-                      type="text"
-                      autoFocus
-                      value={fixName}
-                      placeholder={ing.itemName ?? 'e.g. canned tomatoes'}
-                      onChange={(e) => setFixName(e.target.value)}
-                    />
-                  </div>
-                  <div className="btn-row">
-                    <button
-                      className="btn primary grow"
-                      onClick={() => void saveFix(ing.id)}
-                    >
-                      Remember this
-                    </button>
-                    <button className="btn ghost" onClick={() => setFixing(null)}>
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  className="btn ghost"
-                  style={{ marginTop: '0.5rem', minHeight: 40 }}
-                  onClick={() => {
-                    setFixing(ing.id)
-                    setFixName(ing.itemName ?? '')
-                  }}
-                >
-                  {ing.itemId ? `→ ${ing.itemName}` : 'Link to a pantry item'}
-                </button>
-              )}
             </div>
-          )
-        })}
-      </section>
+          )}
 
-      {recipe.instructions.length > 0 && (
+          <button
+            className="btn primary block"
+            onClick={() => navigate(`/recipes/${recipe.id}/cook`)}
+          >
+            Start cooking
+          </button>
+        </div>
+      </div>
+
+      <div className="detail-cols">
         <section className="section">
-          <div className="section-label">Method</div>
-          <div className="card">
-            <ol style={{ paddingLeft: '1.1rem' }}>
-              {recipe.instructions.map((step, i) => (
-                <li key={i} style={{ marginBottom: '0.75rem' }}>
-                  {step}
-                </li>
-              ))}
-            </ol>
-          </div>
-        </section>
-      )}
+          <div className="section-label">Ingredients</div>
+          {ingredients.map((ing) => {
+            const check = checkByIngredient.get(ing.id)
+            return (
+              <div className="card" key={ing.id}>
+                <div className="row-between">
+                  <span className="grow">{ing.rawText}</span>
+                  {check && (
+                    <span className={`chip ${check.verdict}`}>
+                      {VERDICT_WORDS[check.verdict]}
+                    </span>
+                  )}
+                </div>
+                {check?.detail && <p className="sub">{check.detail}</p>}
 
-      <RecipeChat recipeId={recipe.id} onRevised={reload} />
+                {fixing === ing.id ? (
+                  <div style={{ marginTop: '0.6rem' }}>
+                    <div className="field">
+                      <label>Which pantry item is this?</label>
+                      <input
+                        type="text"
+                        autoFocus
+                        value={fixName}
+                        placeholder={ing.itemName ?? 'e.g. canned tomatoes'}
+                        onChange={(e) => setFixName(e.target.value)}
+                      />
+                    </div>
+                    <div className="btn-row">
+                      <button
+                        className="btn primary grow"
+                        onClick={() => void saveFix(ing.id)}
+                      >
+                        Remember this
+                      </button>
+                      <button className="btn ghost" onClick={() => setFixing(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    className="btn ghost"
+                    style={{ marginTop: '0.5rem', minHeight: 40 }}
+                    onClick={() => {
+                      setFixing(ing.id)
+                      setFixName(ing.itemName ?? '')
+                    }}
+                  >
+                    {ing.itemId ? `→ ${ing.itemName}` : 'Link to a pantry item'}
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </section>
+
+        <div>
+          {recipe.instructions.length > 0 && (
+            <section className="section">
+              <div className="section-label">Method</div>
+              <div className="card">
+                <ol style={{ paddingLeft: '1.1rem' }}>
+                  {recipe.instructions.map((step, i) => (
+                    <li key={i} style={{ marginBottom: '0.75rem' }}>
+                      {step}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </section>
+          )}
+
+          <RecipeChat recipeId={recipe.id} onRevised={reload} />
+        </div>
+      </div>
 
       {deleteError && <div className="error">{deleteError}</div>}
 

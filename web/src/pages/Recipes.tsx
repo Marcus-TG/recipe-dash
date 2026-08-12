@@ -65,7 +65,7 @@ export function Recipes() {
   }
 
   return (
-    <main className="page">
+    <main className="page wide">
       <div className="page-head">
         <div>
           <h1>Recipes</h1>
@@ -73,8 +73,8 @@ export function Recipes() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="seg" style={{ marginBottom: '0.85rem' }}>
+      <div className={`card importer ${mode}`}>
+        <div className="seg">
           <button
             className={mode === 'url' ? 'on' : ''}
             onClick={() => setMode('url')}
@@ -163,11 +163,7 @@ export function Recipes() {
             }}
           />
         </div>
-        {message && (
-          <p className="sub" style={{ marginTop: '0.6rem' }}>
-            {message}
-          </p>
-        )}
+        {message && <p className="sub note">{message}</p>}
       </div>
 
       {error && <div className="error">{error}</div>}
@@ -180,27 +176,29 @@ export function Recipes() {
         </div>
       )}
 
-      {(data ?? []).map((recipe) => (
-        <Link className="card" to={`/recipes/${recipe.id}`} key={recipe.id}>
-          <div className="row">
-            <Thumb src={recipe.thumbnail} alt="" />
-            <div className="grow">
-              <div className="card-title">
-                <span className="grow truncate">{recipe.title}</span>
-                {recipe.status === 'pending_parse' && (
-                  <span className="chip">
-                    <span className="spinner" /> reading
-                  </span>
-                )}
-                {recipe.status === 'parse_failed' && (
-                  <span className="chip missing">failed</span>
-                )}
+      <div className="grid">
+        {(data ?? []).map((recipe) => (
+          <Link className="card" to={`/recipes/${recipe.id}`} key={recipe.id}>
+            <div className="row">
+              <Thumb src={recipe.thumbnail} alt="" />
+              <div className="grow">
+                <div className="card-title">
+                  <span className="grow truncate">{recipe.title}</span>
+                  {recipe.status === 'pending_parse' && (
+                    <span className="chip">
+                      <span className="spinner" /> reading
+                    </span>
+                  )}
+                  {recipe.status === 'parse_failed' && (
+                    <span className="chip missing">failed</span>
+                  )}
+                </div>
+                {recipe.servings && <p className="sub">serves {recipe.servings}</p>}
               </div>
-              {recipe.servings && <p className="sub">serves {recipe.servings}</p>}
             </div>
-          </div>
-        </Link>
-      ))}
+          </Link>
+        ))}
+      </div>
     </main>
   )
 }

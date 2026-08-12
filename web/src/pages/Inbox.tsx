@@ -39,7 +39,7 @@ export function Inbox() {
   const done = (data ?? []).filter((r) => r.status !== 'needs_review')
 
   return (
-    <main className="page">
+    <main className="page wide">
       <div className="page-head">
         <div>
           <h1>Inbox</h1>
@@ -58,16 +58,18 @@ export function Inbox() {
         </div>
       )}
 
-      {pending.map((r) => (
-        <Link className="card" to={`/inbox/${r.id}`} key={r.id}>
-          <div className="card-title">
-            <span className="grow truncate">{r.storeName ?? 'Unknown store'}</span>
-            <span className="chip">{r.lineCount} lines</span>
-          </div>
-          <p className="sub">{when(r.purchasedAt)}</p>
-          {r.note && <p className="sub">⚠ {r.note}</p>}
-        </Link>
-      ))}
+      <div className="grid">
+        {pending.map((r) => (
+          <Link className="card" to={`/inbox/${r.id}`} key={r.id}>
+            <div className="card-title">
+              <span className="grow truncate">{r.storeName ?? 'Unknown store'}</span>
+              <span className="chip">{r.lineCount} lines</span>
+            </div>
+            <p className="sub">{when(r.purchasedAt)}</p>
+            {r.note && <p className="sub">⚠ {r.note}</p>}
+          </Link>
+        ))}
+      </div>
 
       <button
         className="btn ghost block"
@@ -80,15 +82,19 @@ export function Inbox() {
       {done.length > 0 && (
         <section className="section">
           <div className="section-label">Already handled</div>
-          {done.slice(0, 20).map((r) => (
-            <Link className="card" to={`/inbox/${r.id}`} key={r.id}>
-              <div className="row-between">
-                <span className="grow truncate">{r.storeName ?? 'Unknown store'}</span>
-                <span className="chip">{r.status}</span>
-              </div>
-              <p className="sub">{when(r.purchasedAt)}</p>
-            </Link>
-          ))}
+          <div className="grid tight">
+            {done.slice(0, 20).map((r) => (
+              <Link className="card" to={`/inbox/${r.id}`} key={r.id}>
+                <div className="row-between">
+                  <span className="grow truncate">
+                    {r.storeName ?? 'Unknown store'}
+                  </span>
+                  <span className="chip">{r.status}</span>
+                </div>
+                <p className="sub">{when(r.purchasedAt)}</p>
+              </Link>
+            ))}
+          </div>
         </section>
       )}
     </main>

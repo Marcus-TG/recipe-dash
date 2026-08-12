@@ -22,6 +22,9 @@ export function App() {
     <div className="app">
       <Outlet />
       <nav className="nav">
+        <div className="nav-brand">
+          <span aria-hidden>🍲</span> Larder
+        </div>
         {TABS.map((tab) => (
           <NavLink key={tab.to} to={tab.to} end={tab.to === '/'}>
             <span className="glyph">

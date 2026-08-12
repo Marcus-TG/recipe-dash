@@ -28,7 +28,7 @@ export function Pantry() {
   }
 
   return (
-    <main className="page">
+    <main className="page wide">
       <div className="page-head">
         <div>
           <h1>Pantry</h1>
@@ -62,21 +62,25 @@ export function Pantry() {
         </div>
       )}
 
-      {items.map((item) => (
-        <Link className="card" to={`/pantry/${item.id}`} key={item.id}>
-          <div className="card-title">
-            <span className="grow truncate">{item.name}</span>
-            <span className={`chip ${item.level}`}>{item.levelLabel}</span>
-          </div>
-          <div className="row" style={{ marginTop: '0.35rem' }}>
-            <span className="sub grow">
-              {item.quantityBase != null ? item.quantityLabel : 'no amount recorded'}
-              {item.lastConfirmedLabel ? ` · confirmed ${item.lastConfirmedLabel}` : ''}
-            </span>
-            {item.useBySoon && <span className="chip uses-up">use soon</span>}
-          </div>
-        </Link>
-      ))}
+      <div className="grid tight">
+        {items.map((item) => (
+          <Link className="card" to={`/pantry/${item.id}`} key={item.id}>
+            <div className="card-title">
+              <span className="grow truncate">{item.name}</span>
+              <span className={`chip ${item.level}`}>{item.levelLabel}</span>
+            </div>
+            <div className="row" style={{ marginTop: '0.35rem' }}>
+              <span className="sub grow">
+                {item.quantityBase != null ? item.quantityLabel : 'no amount recorded'}
+                {item.lastConfirmedLabel
+                  ? ` · confirmed ${item.lastConfirmedLabel}`
+                  : ''}
+              </span>
+              {item.useBySoon && <span className="chip uses-up">use soon</span>}
+            </div>
+          </Link>
+        ))}
+      </div>
 
       {adding ? (
         <div className="card">

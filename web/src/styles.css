@@ -23,6 +23,7 @@
   --info: #7fb4d4;
   --radius: 14px;
   --nav-h: 68px;
+  --nav-w: 216px;
 }
 
 html,
@@ -177,6 +178,28 @@ a.card {
 button.card:active,
 a.card:active {
   background: var(--surface-2);
+}
+
+/* A list of cards. One column on a phone; the desktop rules below turn it
+   into as many columns as the window can hold. */
+.grid {
+  display: grid;
+  /* minmax(0,1fr), not the default auto: an auto column sizes to the widest
+     unwrappable title and pushes the page sideways. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.grid > .card {
+  margin-bottom: 0;
+  height: 100%;
+}
+
+/* The grid's last row has no bottom margin, so whatever follows adds its own. */
+.grid + .btn,
+.grid + .card {
+  margin-top: 0.85rem;
 }
 
 .card-title {
@@ -415,6 +438,14 @@ label {
   margin-bottom: 0.9rem;
 }
 
+.importer .seg {
+  margin-bottom: 0.85rem;
+}
+
+.note {
+  margin-top: 0.6rem;
+}
+
 /* ---------- misc ---------- */
 
 .muted {
@@ -552,4 +583,278 @@ label {
 .cook-ings {
   max-height: 40vh;
   overflow-y: auto;
+}
+
+/* The sidebar wordmark: pointless on a phone, so it only shows on desktop. */
+.nav-brand {
+  display: none;
+}
+
+/* ---------- pointer devices: hover feedback the phone never needed ------- */
+
+@media (hover: hover) {
+  button.card:hover,
+  a.card:hover {
+    background: var(--surface-2);
+    border-color: #4a4335;
+  }
+
+  .btn:hover:not(:disabled),
+  .seg button:hover {
+    border-color: var(--muted);
+  }
+
+  .btn.primary:hover:not(:disabled) {
+    filter: brightness(1.07);
+    border-color: var(--accent);
+  }
+
+  .nav a:hover {
+    color: var(--text);
+  }
+}
+
+/* ---------- desktop: side rail, wider canvas, multi-column lists ---------
+   Same components, more room. The bottom bar becomes a left rail so the
+   vertical space goes to content, and card lists flow into columns. */
+
+@media (min-width: 860px) {
+  .app {
+    padding-bottom: 0;
+    padding-left: var(--nav-w);
+  }
+
+  /* Detail and form pages stay a readable column. Only the card lists —
+     marked .wide — spend the extra width, because grids scale and forms
+     don't. */
+  .page {
+    max-width: 68rem;
+    padding: 2rem 2.25rem 4rem;
+  }
+
+  .page.wide {
+    max-width: 84rem;
+  }
+
+  h1 {
+    font-size: 2.1rem;
+  }
+
+  .page-head {
+    margin-bottom: 1.5rem;
+  }
+
+  .sub {
+    font-size: 1rem;
+  }
+
+  .empty {
+    padding: 5rem 1rem;
+  }
+
+  /* nav: bottom bar -> left rail */
+  .nav {
+    top: 0;
+    right: auto;
+    width: var(--nav-w);
+    height: 100%;
+    padding: 1.25rem 0.75rem;
+    grid-template-columns: 1fr;
+    grid-auto-rows: max-content;
+    gap: 0.2rem;
+    align-content: start;
+    border-top: none;
+    border-right: 1px solid var(--line);
+  }
+
+  .nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    padding: 0 0.85rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .nav a {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 0.7rem;
+    font-size: 1rem;
+    letter-spacing: 0;
+    min-height: 48px;
+    padding: 0 0.85rem;
+    border-radius: 12px;
+  }
+
+  .nav a.active {
+    background: var(--surface);
+  }
+
+  .nav .glyph {
+    font-size: 1.2rem;
+  }
+
+  .nav .badge {
+    transform: translate(11px, -11px);
+  }
+
+  /* lists: as many columns as fit */
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: 0.85rem;
+  }
+
+  /* Short one-line rows (pantry items) pack tighter than recipe cards. */
+  .grid.tight {
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  }
+
+  /* In a column a long title has somewhere to go, so wrap to two lines
+     instead of cutting it off mid-word. */
+  .grid .card-title {
+    align-items: flex-start;
+  }
+
+  .grid .card-title > .grow {
+    white-space: normal;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  /* A segmented control stretched across the page loses its "pick one" read. */
+  .seg {
+    max-width: 34rem;
+  }
+
+  /* Recipe cards in a grid become photo cards: the thumbnail stops being a
+     64px chip beside the title and becomes the card's picture, bleeding out
+     through the card's own padding. Scoped with :has(> .thumb) so the plain
+     rows inside pantry cards keep their side-by-side layout. */
+  .grid .card {
+    overflow: hidden;
+  }
+
+  .grid .row:has(> .thumb) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  /* Same :has() guard as above, so a browser without :has() drops both rules
+     and falls back to the phone's row layout rather than a broken hybrid. */
+  .grid .row:has(> .thumb) > .thumb {
+    width: calc(100% + 2rem);
+    height: auto;
+    aspect-ratio: 3 / 2;
+    flex: none;
+    margin: -1rem -1rem 0.85rem;
+    border-radius: 0;
+    font-size: 2.75rem;
+  }
+
+  /* A full-bleed button across a 68rem page reads as a banner, not a button. */
+  .btn.block {
+    max-width: 26rem;
+  }
+
+  /* Recipes: the import card lies down as a toolbar in link mode. */
+  .importer.url {
+    display: grid;
+    grid-template-columns: 17rem minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 0.85rem;
+  }
+
+  .importer.url .seg,
+  .importer.url .field {
+    margin-bottom: 0;
+  }
+
+  .importer .note {
+    grid-column: 1 / -1;
+  }
+
+  /* Recipe detail: picture left, title + verdict + cook button right. */
+  .detail-head {
+    margin-bottom: 2rem;
+    max-width: 44rem;
+  }
+
+  .detail-head.has-photo {
+    display: grid;
+    grid-template-columns: minmax(0, 26rem) minmax(0, 40rem);
+    gap: 2rem;
+    align-items: start;
+    max-width: none;
+  }
+
+  .detail-head .hero {
+    max-height: none;
+    aspect-ratio: 4 / 3;
+  }
+
+  .detail-head .page-head {
+    margin-bottom: 1rem;
+  }
+
+  /* Recipe detail: ingredients beside the method instead of below it. */
+  /* The method column is prose — it gets a hard cap however wide the screen
+     is, because a 1500px line of instructions is unreadable. */
+  .detail-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 23rem) minmax(0, 44rem);
+    gap: 2rem;
+    align-items: start;
+  }
+
+  .detail-cols > * {
+    min-width: 0;
+  }
+
+  .detail-cols .section:first-child {
+    margin-top: 0;
+  }
+
+  .hero {
+    max-height: 34vh;
+  }
+
+  /* Cook mode still owns the whole screen — just stop the text spanning it. */
+  .cook {
+    padding: 2rem clamp(2rem, 14vw, 12rem);
+  }
+
+  .cook-tap {
+    min-height: 16vh;
+  }
+}
+
+/* Big monitors: let the card lists keep claiming width. Prose blocks inside
+   are capped separately above, so only the grids actually get wider. */
+@media (min-width: 1500px) {
+  .page.wide {
+    max-width: 108rem;
+  }
+}
+
+/* Very wide monitors: the lists stop pretending there's a page edge. The
+   toolbar gets its own cap so the URL field doesn't become a runway. */
+@media (min-width: 2000px) {
+  :root {
+    --nav-w: 240px;
+  }
+
+  .page.wide {
+    max-width: none;
+  }
+
+  .importer {
+    max-width: 76rem;
+  }
 }

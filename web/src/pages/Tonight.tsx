@@ -66,7 +66,7 @@ export function Tonight() {
   const hasAny = (data?.length ?? 0) > 0
 
   return (
-    <main className="page">
+    <main className="page wide">
       <div className="page-head">
         <div>
           <h1>Tonight</h1>
@@ -92,9 +92,11 @@ export function Tonight() {
         return (
           <section className="section" key={verdict}>
             <div className="section-label">{HEADINGS[verdict]}</div>
-            {matches.map((m) => (
-              <MatchCard key={m.recipeId} match={m} />
-            ))}
+            <div className="grid">
+              {matches.map((m) => (
+                <MatchCard key={m.recipeId} match={m} />
+              ))}
+            </div>
           </section>
         )
       })}
