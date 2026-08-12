@@ -11,6 +11,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:3000',
+      // Recipe photos live behind the API too — without this they 404 in dev
+      // and every card falls back to the placeholder.
+      '/uploads': 'http://localhost:3000',
     },
   },
 })

@@ -55,8 +55,9 @@ export async function buildServer() {
     { prefix: '/api' },
   )
 
-  // Uploaded recipe photos
-  const uploads = path.join(config.DATA_DIR, 'uploads')
+  // Uploaded recipe photos. Resolved: DATA_DIR defaults to a relative './data'
+  // and fastify-static refuses anything but an absolute root.
+  const uploads = path.resolve(config.DATA_DIR, 'uploads')
   fs.mkdirSync(uploads, { recursive: true })
   await app.register(fastifyStatic, {
     root: uploads,
