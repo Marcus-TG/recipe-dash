@@ -3,7 +3,14 @@ import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 import { db } from '../db/client.js'
-import { items, llmJobs, recipeIngredients, recipes } from '../db/schema.js'
+import {
+  cookSessionLines,
+  cookSessions,
+  items,
+  llmJobs,
+  recipeIngredients,
+  recipes,
+} from '../db/schema.js'
 import { matchRecipes } from '../domain/matching.js'
 import { findOrCreateItem, upsertAlias } from '../domain/resolve.js'
 import { normalizeItemName } from '../domain/text.js'
@@ -262,12 +269,40 @@ export async function recipeRoutes(app: FastifyInstance) {
     method: 'DELETE',
     url: '/recipes/:id',
     schema: {
-      description: 'Delete a recipe.',
+      description:
+        'Delete a recipe and its cook history. Pantry events stay — what you actually ' +
+        'used is a fact about the pantry, not about the recipe.',
       tags: ['recipes'],
       params: z.object({ id: z.coerce.number() }),
     },
-    handler: async (req) => {
-      db.delete(recipes).where(eq(recipes.id, req.params.id)).run()
+    handler: async (req, reply) => {
+      const recipe = db
+        .select()
+        .from(recipes)
+        .where(eq(recipes.id, req.params.id))
+        .get()
+      if (!recipe) return reply.code(404).send({ message: 'Not found' })
+
+      // Cook sessions reference the recipe, so they have to go first —
+      // their lines cascade with them, which in turn frees the ingredient
+      // rows the recipe itself cascades.
+      db.transaction(() => {
+        const sessions = db
+          .select({ id: cookSessions.id })
+          .from(cookSessions)
+          .where(eq(cookSessions.recipeId, recipe.id))
+          .all()
+        for (const s of sessions) {
+          db.delete(cookSessionLines)
+            .where(eq(cookSessionLines.sessionId, s.id))
+            .run()
+        }
+        db.delete(cookSessions).where(eq(cookSessions.recipeId, recipe.id)).run()
+        db.delete(recipeIngredients)
+          .where(eq(recipeIngredients.recipeId, recipe.id))
+          .run()
+        db.delete(recipes).where(eq(recipes.id, recipe.id)).run()
+      })
       return { ok: true }
     },
   })

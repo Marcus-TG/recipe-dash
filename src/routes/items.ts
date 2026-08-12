@@ -3,7 +3,18 @@ import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 import { db } from '../db/client.js'
-import { itemState, items, pantryEvents, receiptLines, receipts } from '../db/schema.js'
+import {
+  aliases,
+  cookSessionLines,
+  cookSessions,
+  itemState,
+  items,
+  pantryEvents,
+  receiptLines,
+  receipts,
+  recipeIngredients,
+  recipes,
+} from '../db/schema.js'
 import {
   appendEvents,
   buildItemView,
@@ -104,7 +115,38 @@ export async function itemRoutes(app: FastifyInstance) {
         .get()
       const ledger = itemLedger(item.id).map((e) => {
         // Trace every event back to its cause.
-        let source: { kind: string; label: string; receiptId?: number } | null = null
+        let source: {
+          kind: string
+          label: string
+          receiptId?: number
+          recipeId?: number
+        } | null = null
+        if (e.sourceType === 'cook_line' && e.sourceId) {
+          const line = db
+            .select()
+            .from(cookSessionLines)
+            .where(eq(cookSessionLines.id, e.sourceId))
+            .get()
+          const session = line
+            ? db
+                .select()
+                .from(cookSessions)
+                .where(eq(cookSessions.id, line.sessionId))
+                .get()
+            : null
+          const recipe = session
+            ? db.select().from(recipes).where(eq(recipes.id, session.recipeId)).get()
+            : null
+          if (line) {
+            source = {
+              kind: 'cook',
+              // The recipe may since have been deleted — the ledger entry is
+              // still true, so fall back to the ingredient line.
+              label: recipe ? `cooked ${recipe.title}` : line.label,
+              ...(recipe ? { recipeId: recipe.id } : {}),
+            }
+          }
+        }
         if (e.sourceType === 'receipt_line' && e.sourceId) {
           const line = db
             .select()
@@ -182,11 +224,29 @@ export async function itemRoutes(app: FastifyInstance) {
       tags: ['pantry'],
       params: z.object({ id: z.coerce.number() }),
     },
-    handler: async (req) => {
+    handler: async (req, reply) => {
+      const id = req.params.id
+      const item = db.select().from(items).where(eq(items.id, id)).get()
+      if (!item) return reply.code(404).send({ message: 'Not found' })
       db.transaction(() => {
-        db.delete(pantryEvents).where(eq(pantryEvents.itemId, req.params.id)).run()
-        db.delete(itemState).where(eq(itemState.itemId, req.params.id)).run()
-        db.delete(items).where(eq(items.id, req.params.id)).run()
+        // Everything that points at this item has to let go first: learned
+        // aliases, and any receipt/recipe/cook line that resolved to it.
+        db.delete(aliases).where(eq(aliases.itemId, id)).run()
+        db.update(receiptLines)
+          .set({ itemId: null, status: 'ignored' })
+          .where(eq(receiptLines.itemId, id))
+          .run()
+        db.update(recipeIngredients)
+          .set({ itemId: null, resolution: 'unresolved' })
+          .where(eq(recipeIngredients.itemId, id))
+          .run()
+        db.update(cookSessionLines)
+          .set({ itemId: null })
+          .where(eq(cookSessionLines.itemId, id))
+          .run()
+        db.delete(pantryEvents).where(eq(pantryEvents.itemId, id)).run()
+        db.delete(itemState).where(eq(itemState.itemId, id)).run()
+        db.delete(items).where(eq(items.id, id)).run()
       })
       return { ok: true }
     },

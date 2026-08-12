@@ -24,6 +24,8 @@ export function RecipeDetail() {
   const { data, loading, error, reload } = useFetch<Payload>(`/recipes/${id}`)
   const [fixing, setFixing] = useState<number | null>(null)
   const [fixName, setFixName] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // Still being parsed — poll until it lands.
   useEffect(() => {
@@ -42,8 +44,15 @@ export function RecipeDetail() {
   }
 
   const remove = async () => {
-    await del(`/recipes/${id}`)
-    navigate('/recipes')
+    setDeleteError(null)
+    try {
+      await del(`/recipes/${id}`)
+      navigate('/recipes')
+    } catch (err) {
+      // This used to fail silently, which looked like a dead button.
+      setDeleteError((err as Error).message)
+      setConfirmDelete(false)
+    }
   }
 
   if (loading) return <main className="page">Loading…</main>
@@ -196,9 +205,25 @@ export function RecipeDetail() {
 
       <RecipeChat recipeId={recipe.id} onRevised={reload} />
 
-      <button className="btn ghost danger block" onClick={() => void remove()}>
-        Delete recipe
-      </button>
+      {deleteError && <div className="error">{deleteError}</div>}
+
+      {confirmDelete ? (
+        <div className="btn-row">
+          <button className="btn danger grow" onClick={() => void remove()}>
+            Yes, delete “{recipe.title}”
+          </button>
+          <button className="btn ghost" onClick={() => setConfirmDelete(false)}>
+            Keep it
+          </button>
+        </div>
+      ) : (
+        <button
+          className="btn ghost danger block"
+          onClick={() => setConfirmDelete(true)}
+        >
+          Delete recipe
+        </button>
+      )}
     </main>
   )
 }

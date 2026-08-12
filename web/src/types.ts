@@ -23,7 +23,12 @@ export type LedgerEvent = {
   occurredAt: string
   sourceType: string
   note: string | null
-  source: { kind: string; label: string; receiptId?: number } | null
+  source: {
+    kind: string
+    label: string
+    receiptId?: number
+    recipeId?: number
+  } | null
 }
 
 export type ReceiptSummary = {

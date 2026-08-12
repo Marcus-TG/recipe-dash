@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { del, post, useFetch } from '../api'
 import type { ItemView, LedgerEvent } from '../types'
@@ -25,6 +26,8 @@ export function ItemDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { data, loading, error, reload } = useFetch<Payload>(`/items/${id}`)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const say = async (level: 'plenty' | 'some' | 'low' | 'out') => {
     await post(`/items/${id}/events`, { type: 'snapshot', level })
@@ -32,8 +35,14 @@ export function ItemDetail() {
   }
 
   const remove = async () => {
-    await del(`/items/${id}`)
-    navigate('/pantry')
+    setDeleteError(null)
+    try {
+      await del(`/items/${id}`)
+      navigate('/pantry')
+    } catch (err) {
+      setDeleteError((err as Error).message)
+      setConfirmDelete(false)
+    }
   }
 
   if (loading) return <main className="page">Loading…</main>
@@ -96,7 +105,7 @@ export function ItemDetail() {
                   <>
                     <br />
                     <span className="raw">
-                      {e.source.kind === 'receipt' ? '🧾 ' : ''}
+                      {e.source.kind === 'receipt' ? '🧾 ' : '🍳 '}
                       {e.source.label}
                     </span>
                   </>
@@ -118,9 +127,25 @@ export function ItemDetail() {
         </div>
       </section>
 
-      <button className="btn ghost danger block" onClick={() => void remove()}>
-        Delete this item
-      </button>
+      {deleteError && <div className="error">{deleteError}</div>}
+
+      {confirmDelete ? (
+        <div className="btn-row">
+          <button className="btn danger grow" onClick={() => void remove()}>
+            Yes, delete {view.name} and its history
+          </button>
+          <button className="btn ghost" onClick={() => setConfirmDelete(false)}>
+            Keep it
+          </button>
+        </div>
+      ) : (
+        <button
+          className="btn ghost danger block"
+          onClick={() => setConfirmDelete(true)}
+        >
+          Delete this item
+        </button>
+      )}
     </main>
   )
 }

@@ -4,12 +4,15 @@ export async function api<T = unknown>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
+  // Only declare a JSON body when there actually is one. Sending
+  // content-type: application/json with an empty body makes Fastify reject the
+  // request outright, which silently broke every DELETE in the app.
+  const isJsonBody = init?.body != null && !(init.body instanceof FormData)
   const res = await fetch(`/api${path}`, {
     ...init,
-    headers:
-      init?.body instanceof FormData
-        ? init.headers
-        : { 'content-type': 'application/json', ...(init?.headers ?? {}) },
+    headers: isJsonBody
+      ? { 'content-type': 'application/json', ...(init?.headers ?? {}) }
+      : init?.headers,
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
