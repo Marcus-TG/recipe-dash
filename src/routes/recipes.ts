@@ -16,7 +16,10 @@ import { findOrCreateItem, upsertAlias } from '../domain/resolve.js'
 import { normalizeItemName } from '../domain/text.js'
 import {
   applyRecipeRevision,
+  attachRecipeImageFile,
+  attachRecipeImageUrl,
   chatAboutRecipe,
+  clearRecipeImage,
   importRecipeFromPhoto,
   importRecipeFromText,
   importRecipeFromUrl,
@@ -220,6 +223,83 @@ export async function recipeRoutes(app: FastifyInstance) {
       if (!file) return reply.code(400).send({ message: 'no file uploaded' })
       const buffer = await file.toBuffer()
       return importRecipeFromPhoto(buffer, file.filename ?? 'photo.jpg')
+    },
+  })
+
+  r.route({
+    method: 'POST',
+    url: '/recipes/:id/image',
+    schema: {
+      description:
+        'Attach your own picture to a recipe (multipart, field name "file"). Useful for ' +
+        'pasted recipes, which arrive without one.',
+      tags: ['recipes'],
+      params: z.object({ id: z.coerce.number() }),
+      consumes: ['multipart/form-data'],
+    },
+    handler: async (req, reply) => {
+      const recipe = db
+        .select()
+        .from(recipes)
+        .where(eq(recipes.id, req.params.id))
+        .get()
+      if (!recipe) return reply.code(404).send({ message: 'Not found' })
+      const file = await (req as any).file()
+      if (!file) return reply.code(400).send({ message: 'no file uploaded' })
+      try {
+        const filename = attachRecipeImageFile(
+          recipe.id,
+          await file.toBuffer(),
+          file.mimetype ?? '',
+        )
+        return { thumbnail: `/uploads/${filename}` }
+      } catch (err) {
+        return reply.code(400).send({ message: (err as Error).message })
+      }
+    },
+  })
+
+  r.route({
+    method: 'POST',
+    url: '/recipes/:id/image-url',
+    schema: {
+      description:
+        'Attach a picture by link. It is downloaded and cached locally, so the recipe ' +
+        'keeps its picture even if the source disappears.',
+      tags: ['recipes'],
+      params: z.object({ id: z.coerce.number() }),
+      body: z.object({ url: z.string().url() }),
+    },
+    handler: async (req, reply) => {
+      const recipe = db
+        .select()
+        .from(recipes)
+        .where(eq(recipes.id, req.params.id))
+        .get()
+      if (!recipe) return reply.code(404).send({ message: 'Not found' })
+      try {
+        const filename = await attachRecipeImageUrl(recipe.id, req.body.url)
+        return { thumbnail: filename ? `/uploads/${filename}` : null }
+      } catch (err) {
+        // Tell the user now rather than failing silently in the background.
+        return reply.code(400).send({
+          message: `Couldn’t use that link: ${(err as Error).message}`,
+        })
+      }
+    },
+  })
+
+  r.route({
+    method: 'DELETE',
+    url: '/recipes/:id/image',
+    schema: {
+      description: 'Remove a recipe’s picture.',
+      tags: ['recipes'],
+      params: z.object({ id: z.coerce.number() }),
+    },
+    handler: async (req) => {
+      clearRecipeImage(req.params.id)
+      return { ok: true }
     },
   })
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { del, patch, useFetch } from '../api'
 import { RecipeChat } from '../components/RecipeChat'
+import { RecipeImage } from '../components/RecipeImage'
 import type { IngredientCheck, Recipe, RecipeIngredient, RecipeMatch } from '../types'
 
 type Payload = {
@@ -93,9 +94,12 @@ export function RecipeDetail() {
       <Link className="back" to="/recipes">
         ‹ Recipes
       </Link>
-      {recipe.thumbnail && (
-        <img className="hero" src={recipe.thumbnail} alt="" loading="lazy" />
-      )}
+      <RecipeImage
+        recipeId={recipe.id}
+        thumbnail={recipe.thumbnail}
+        onChanged={reload}
+      />
+
       <div className="page-head">
         <div>
           <h1>{recipe.title}</h1>

@@ -140,17 +140,65 @@ const EXT_BY_TYPE: Record<string, string> = {
   'image/gif': 'gif',
 }
 
+/** Attach a picture you uploaded yourself. Returns the served path. */
+export function attachRecipeImageFile(
+  recipeId: number,
+  buffer: Buffer,
+  mimetype: string,
+) {
+  const ext = EXT_BY_TYPE[mimetype.split(';')[0]!.trim()]
+  if (!ext) throw new Error(`unsupported image type: ${mimetype}`)
+  if (buffer.byteLength > MAX_IMAGE_BYTES) throw new Error('image too big')
+  const uploads = path.join(config.DATA_DIR, 'uploads')
+  fs.mkdirSync(uploads, { recursive: true })
+  // Timestamped so a replacement doesn't get served from a stale browser cache.
+  const filename = `recipe-${recipeId}-${Date.now()}.${ext}`
+  fs.writeFileSync(path.join(uploads, filename), buffer)
+  db.update(recipes)
+    .set({ imageFile: filename })
+    .where(eq(recipes.id, recipeId))
+    .run()
+  return filename
+}
+
+/**
+ * Point a recipe at a picture on the web. Downloads immediately rather than
+ * queueing: someone pasted this link and is waiting, so a bad URL should say
+ * so now instead of failing invisibly in the background.
+ */
+export async function attachRecipeImageUrl(recipeId: number, url: string) {
+  db.update(recipes)
+    // Clearing imageFile is what allows a replacement.
+    .set({ imageUrl: url, imageFile: null })
+    .where(eq(recipes.id, recipeId))
+    .run()
+  return downloadRecipeImage(recipeId)
+}
+
+export function clearRecipeImage(recipeId: number) {
+  const recipe = db.select().from(recipes).where(eq(recipes.id, recipeId)).get()
+  if (!recipe) return
+  // Never delete the photo a photo-import was created from — it's the source.
+  if (recipe.imageFile && recipe.imageFile !== recipe.sourceImagePath) {
+    try {
+      fs.unlinkSync(path.join(config.DATA_DIR, 'uploads', recipe.imageFile))
+    } catch {
+      /* already gone */
+    }
+  }
+  db.update(recipes)
+    .set({ imageFile: null, imageUrl: null })
+    .where(eq(recipes.id, recipeId))
+    .run()
+}
+
 /**
  * Cache the recipe's picture locally. A missing thumbnail is cosmetic, so
- * every failure here is swallowed rather than retried into the ground.
+ * failures are permanent rather than retried into the ground.
  */
-registerHandler('fetch_recipe_image', async (payload: { recipeId: number }) => {
-  const recipe = db
-    .select()
-    .from(recipes)
-    .where(eq(recipes.id, payload.recipeId))
-    .get()
-  if (!recipe?.imageUrl || recipe.imageFile) return
+export async function downloadRecipeImage(recipeId: number) {
+  const recipe = db.select().from(recipes).where(eq(recipes.id, recipeId)).get()
+  if (!recipe?.imageUrl || recipe.imageFile) return null
 
   let res: Response
   try {
@@ -164,28 +212,41 @@ registerHandler('fetch_recipe_image', async (payload: { recipeId: number }) => {
       },
       signal: AbortSignal.timeout(30_000),
     })
-  } catch (err) {
-    throw new PermanentJobError(`image fetch failed: ${String(err)}`)
+  } catch {
+    throw new PermanentJobError('could not reach that address')
   }
-  if (!res.ok) throw new PermanentJobError(`image fetch → ${res.status}`)
+  if (!res.ok) {
+    throw new PermanentJobError(`that address returned an error (${res.status})`)
+  }
 
   const type = (res.headers.get('content-type') ?? '').split(';')[0]!.trim()
   const ext = EXT_BY_TYPE[type]
-  if (!ext) throw new PermanentJobError(`not an image: ${type}`)
+  if (!ext) {
+    throw new PermanentJobError(
+      `that link is ${type || 'not an image'} — you need the address of the image itself`,
+    )
+  }
 
   const buffer = Buffer.from(await res.arrayBuffer())
   if (buffer.byteLength > MAX_IMAGE_BYTES) {
-    throw new PermanentJobError(`image too big: ${buffer.byteLength} bytes`)
+    throw new PermanentJobError('that image is bigger than 8 MB')
   }
 
   const uploads = path.join(config.DATA_DIR, 'uploads')
   fs.mkdirSync(uploads, { recursive: true })
-  const filename = `recipe-${recipe.id}.${ext}`
+  // Timestamped so a replacement isn't served from a stale browser cache.
+  const filename = `recipe-${recipe.id}-${Date.now()}.${ext}`
   fs.writeFileSync(path.join(uploads, filename), buffer)
   db.update(recipes)
     .set({ imageFile: filename })
     .where(eq(recipes.id, recipe.id))
     .run()
+  return filename
+}
+
+// The automatic path (during import) stays queued — nobody is waiting on it.
+registerHandler('fetch_recipe_image', async (payload: { recipeId: number }) => {
+  await downloadRecipeImage(payload.recipeId)
 })
 
 // ---------- URL path: schema.org JSON-LD first ----------
