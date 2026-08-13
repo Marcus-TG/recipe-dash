@@ -10,7 +10,12 @@ import {
   stores,
 } from '../db/schema.js'
 import { appendEvents } from '../domain/pantry.js'
-import { findOrCreateItem, lookupAlias, upsertAlias } from '../domain/resolve.js'
+import {
+  findOrCreateItem,
+  lookupAlias,
+  relinkUnresolvedIngredients,
+  upsertAlias,
+} from '../domain/resolve.js'
 import {
   normalizeReceiptText,
   quantityFromReceiptLine,
@@ -170,7 +175,12 @@ const ReceiptParse = z.object({
     z.object({
       index: z.number().describe('the number shown before the line'),
       is_item: z.boolean().describe('false for totals, discounts, junk'),
-      name: z.string().describe('plain English item name, e.g. "chicken breast"'),
+      name: z
+        .string()
+        .describe(
+          'the generic food, brand removed, as a recipe would name it: ' +
+            '"gnocchi", "chicken broth", "baby spinach", "chicken breast"',
+        ),
       quantity: z.number().describe('0 if unknown'),
       unit: z.string().describe('g, kg, lb, ml, l, ea — empty string if unknown'),
       category: z.string().describe(
@@ -214,8 +224,14 @@ registerHandler('parse_receipt_lines', async (payload: { receiptId: number }) =>
   const result = await structured({
     schema: ReceiptParse,
     system:
-      'You read grocery receipt lines and turn abbreviated store text into plain English item names. ' +
-      'Example: "GRT VAL CHKN BRST 2LB" is chicken breast, quantity 2, unit lb. ' +
+      'You read grocery receipt lines and turn abbreviated store text into the generic name a ' +
+      'RECIPE would use for that food. ' +
+      'Strip the brand, the store label, the pack size and the marketing words — they say who ' +
+      'sold it, not what it is: "GRT VAL CHKN BRST 2LB" is chicken breast (quantity 2, unit lb), ' +
+      '"VITA SANA POTATO GNOCCHI 500G" is gnocchi, "CAMPBELLS CHKN BROTH" is chicken broth, ' +
+      '"EB FARMS ORG BABY SPINACH" is baby spinach. ' +
+      'Keep the words that change what the food IS — canned vs fresh, whole vs ground, the cut ' +
+      'of meat, the kind of flour — and drop everything else. ' +
       'Set is_item=false for totals, taxes, deposits, discounts, addresses, and anything that is ' +
       'not a purchased food or household product. ' +
       'Return one entry per numbered line, using that number as index. Never invent items.',
@@ -360,6 +376,9 @@ export function confirmReceipt(receiptId: number, input: ConfirmLine[]) {
       .where(eq(receipts.id, receiptId))
       .run()
   })
+  // Groceries just landed: recipes that wanted them should say so now, rather
+  // than waiting to be re-imported.
+  relinkUnresolvedIngredients()
 }
 
 /** Dismissing teaches too: "not groceries" is remembered per store. */

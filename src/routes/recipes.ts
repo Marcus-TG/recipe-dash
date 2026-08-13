@@ -13,7 +13,7 @@ import {
 } from '../db/schema.js'
 import { matchRecipes } from '../domain/matching.js'
 import { findOrCreateItem, upsertAlias } from '../domain/resolve.js'
-import { normalizeItemName } from '../domain/text.js'
+import { normalizeItemName, parseIngredientLine } from '../domain/text.js'
 import {
   applyRecipeRevision,
   attachRecipeImageFile,
@@ -350,9 +350,12 @@ export async function recipeRoutes(app: FastifyInstance) {
         itemId = findOrCreateItem(req.body.itemName).id
       }
       if (itemId) {
+        // Key on the parsed NAME, not the whole line: that is what
+        // resolveIngredientName looks up, and keying on "2 cups diced
+        // tomatoes" meant a correction was never found again.
         upsertAlias({
           domain: 'ingredient',
-          rawTextNormalized: normalizeItemName(ing.rawText),
+          rawTextNormalized: normalizeItemName(parseIngredientLine(ing.rawText).name),
           storeId: null,
           itemId,
           source: 'human',

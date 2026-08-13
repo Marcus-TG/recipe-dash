@@ -74,6 +74,19 @@ const UNITS: Record<string, { family: UnitFamily; toBase: number }> = {
   whole: { family: 'count', toBase: 1 },
 }
 
+/**
+ * Plurals the table doesn't spell out. Worth doing generically rather than
+ * listing every form: an unrecognized unit doesn't just lose the amount, it
+ * leaks into the ingredient NAME ("2 packages gnocchi" → "packages gnocchi"),
+ * and then nothing in the pantry can ever match it.
+ */
+function depluralize(u: string): string | null {
+  if (u.endsWith('ves')) return `${u.slice(0, -3)}f` // loaves → loaf
+  if (u.endsWith('es') && UNITS[u.slice(0, -2)]) return u.slice(0, -2) // boxes → box
+  if (u.endsWith('s')) return u.slice(0, -1) // packages → package
+  return null
+}
+
 export function normalizeUnit(unit: string | null | undefined): string | null {
   if (!unit) return null
   const u = unit.trim().toLowerCase().replace(/\.$/, '')
@@ -81,7 +94,9 @@ export function normalizeUnit(unit: string | null | undefined): string | null {
   if (UNITS[u]) return u
   // "fl. oz." and friends
   const collapsed = u.replace(/[.\s]+/g, ' ').trim()
-  return UNITS[collapsed] ? collapsed : null
+  if (UNITS[collapsed]) return collapsed
+  const singular = depluralize(collapsed)
+  return singular && UNITS[singular] ? singular : null
 }
 
 export function unitFamily(unit: string | null | undefined): UnitFamily | null {

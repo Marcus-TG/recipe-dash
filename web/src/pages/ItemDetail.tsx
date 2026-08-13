@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { del, post, useFetch } from '../api'
+import { del, patch, post, useFetch } from '../api'
 import type { ItemView, LedgerEvent } from '../types'
 
 type Payload = {
@@ -28,10 +28,27 @@ export function ItemDetail() {
   const { data, loading, error, reload } = useFetch<Payload>(`/items/${id}`)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState(false)
+  const [draftName, setDraftName] = useState('')
+  const [renameError, setRenameError] = useState<string | null>(null)
 
   const say = async (level: 'plenty' | 'some' | 'low' | 'out') => {
     await post(`/items/${id}/events`, { type: 'snapshot', level })
     reload()
+  }
+
+  const rename = async () => {
+    setRenameError(null)
+    try {
+      const res = await patch<Payload>(`/items/${id}`, { name: draftName })
+      setRenaming(false)
+      // A rename onto an existing name merges the two, and the survivor may
+      // not be the item we were looking at.
+      if (String(res.item.id) !== id) navigate(`/pantry/${res.item.id}`)
+      else reload()
+    } catch (err) {
+      setRenameError((err as Error).message)
+    }
   }
 
   const remove = async () => {
@@ -71,6 +88,49 @@ export function ItemDetail() {
           </p>
         </div>
       </div>
+
+      {renaming ? (
+        <div className="card">
+          <h2>What is this, generically?</h2>
+          <p className="sub" style={{ marginBottom: '0.75rem' }}>
+            Recipes ask for “gnocchi”, not “vita sana potato gnocchi”. Drop the
+            brand and the pack size and recipes will start finding it. If
+            something else already has that name, the two get merged and both
+            histories are kept.
+          </p>
+          {renameError && <div className="error">{renameError}</div>}
+          <input
+            type="text"
+            value={draftName}
+            autoFocus
+            onChange={(e) => setDraftName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void rename()}
+          />
+          <div className="btn-row" style={{ marginTop: '0.75rem' }}>
+            <button
+              className="btn primary grow"
+              disabled={!draftName.trim()}
+              onClick={() => void rename()}
+            >
+              Save name
+            </button>
+            <button className="btn ghost" onClick={() => setRenaming(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          className="btn ghost block"
+          onClick={() => {
+            setDraftName(view.name)
+            setRenameError(null)
+            setRenaming(true)
+          }}
+        >
+          Rename this item
+        </button>
+      )}
 
       <div className="card">
         <h2>How much is there really?</h2>

@@ -22,6 +22,7 @@ import {
   itemLedger,
   rebuildAllItemState,
 } from '../domain/pantry.js'
+import { relinkUnresolvedIngredients, renameItem } from '../domain/resolve.js'
 import { toBase } from '../domain/units.js'
 import { normalizeItemName } from '../domain/text.js'
 
@@ -81,7 +82,7 @@ export async function itemRoutes(app: FastifyInstance) {
     handler: async (req) => {
       const b = req.body
       const defaults = CATEGORY_DEFAULTS[b.category] ?? CATEGORY_DEFAULTS.other!
-      return db
+      const created = db
         .insert(items)
         .values({
           name: normalizeItemName(b.name) || b.name,
@@ -93,6 +94,51 @@ export async function itemRoutes(app: FastifyInstance) {
         })
         .returning()
         .get()
+      // A new item can answer an ingredient that was unresolved until now.
+      relinkUnresolvedIngredients()
+      return created
+    },
+  })
+
+  r.route({
+    method: 'PATCH',
+    url: '/items/:id',
+    schema: {
+      description:
+        'Edit an item. Renaming to a name another item already has MERGES the two — ' +
+        'both ledgers survive under the surviving item. Use this to turn a brand name ' +
+        'from a receipt ("vita sana potato gnocchi") into the generic food ("gnocchi") ' +
+        'that recipes actually ask for.',
+      tags: ['pantry'],
+      params: z.object({ id: z.coerce.number() }),
+      body: z.object({
+        name: z.string().min(1).optional(),
+        category: z.string().optional(),
+        unitFamily: z.enum(['mass', 'volume', 'count']).optional(),
+        densityGPerMl: z.number().nullish(),
+      }),
+    },
+    handler: async (req, reply) => {
+      const b = req.body
+      let item = db.select().from(items).where(eq(items.id, req.params.id)).get()
+      if (!item) return reply.code(404).send({ message: 'Not found' })
+
+      if (b.name != null) {
+        // May return a DIFFERENT row than the one asked for: a merge keeps the
+        // item that already owned the name.
+        item = renameItem(item.id, b.name) ?? item
+      }
+      const rest = {
+        ...(b.category != null ? { category: b.category } : {}),
+        ...(b.unitFamily != null ? { unitFamily: b.unitFamily } : {}),
+        ...(b.densityGPerMl !== undefined ? { densityGPerMl: b.densityGPerMl ?? null } : {}),
+      }
+      if (Object.keys(rest).length > 0) {
+        db.update(items).set(rest).where(eq(items.id, item.id)).run()
+        item = db.select().from(items).where(eq(items.id, item.id)).get()!
+      }
+      const state = db.select().from(itemState).where(eq(itemState.itemId, item.id)).get()
+      return { item, view: buildItemView(item, state) }
     },
   })
 

@@ -173,9 +173,26 @@ rewrite — because one call asked to do both wrote the revision into the prose
 and left the structured fields empty.
 
 Ingredient lines resolve through a ladder, cheapest first: deterministic
-qty/unit parse → ingredient-alias lookup → normalized name match → embedding
-similarity (nomic-embed-text; optional, never a blocker) → batched LLM →
-`unresolved` (legal, labeled honestly).
+qty/unit parse → ingredient-alias lookup → normalized name match → head-noun
+containment → embedding similarity (nomic-embed-text; optional, never a
+blocker) → batched LLM → `unresolved` (legal, labeled honestly).
+
+**Head-noun containment** is one-directional on purpose. A pantry name may
+carry extra words the recipe doesn't — brand, store, pack size — so "gnocchi"
+is answered by "vita sana potato gnocchi". The reverse is refused: extra words
+on the recipe side are usually meaningful, so a pantry "cream" must never
+answer "sour cream". Both sides must agree on the last word, which is what
+stops "corn" matching "cornstarch". Descriptors (chopped, organic, large) are
+stripped first; form words (canned, dried, frozen, ground) are NOT, because
+they change what the food is.
+
+This only works if pantry names stay generic, so the receipt parser is told to
+name the food the way a recipe would and drop the brand. Receipts that already
+created brand-named items are fixed with a rename, which merges when the new
+name is taken — both ledgers survive under the surviving item. Any item added,
+renamed or confirmed off a receipt re-runs the cheap rungs for every unresolved
+ingredient, so buying gnocchi lights up the recipes that wanted gnocchi without
+re-importing them.
 
 ## "Cookable tonight"
 

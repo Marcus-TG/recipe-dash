@@ -30,6 +30,47 @@ export function normalizeItemName(raw: string): string {
   )
 }
 
+/**
+ * Words that describe how a thing was cut, graded, branded or sold — never
+ * what it IS. Dropped before matching so "2 packages gnocchi" and "vita sana
+ * potato gnocchi" can meet in the middle.
+ *
+ * Deliberately does NOT include form words (canned, dried, fresh, frozen,
+ * ground, smoked): those change the ingredient, and the schema's rule is that
+ * canned tomatoes are not fresh tomatoes. Better to leave those unmatched and
+ * let the model decide than to invent a match.
+ */
+const DESCRIPTOR_WORDS = new Set([
+  // preparation
+  'chopped', 'diced', 'sliced', 'minced', 'grated', 'shredded', 'crushed',
+  'peeled', 'trimmed', 'halved', 'quartered', 'cubed', 'crumbled', 'melted',
+  'softened', 'beaten', 'divided', 'packed', 'rinsed', 'drained', 'scrubbed',
+  'cut', 'torn', 'julienned', 'zested', 'juiced',
+  // manner
+  'freshly', 'finely', 'coarsely', 'thinly', 'roughly', 'lightly', 'well',
+  // grade / marketing / variant detail
+  'extra', 'virgin', 'pure', 'organic', 'natural', 'premium', 'plain',
+  'unsalted', 'salted', 'reduced', 'skim', 'lowfat', 'nonfat', 'light',
+  'baby', 'jumbo', 'large', 'medium', 'small', 'mini', 'giant', 'family',
+  'size', 'sized', 'value', 'brand', 'style',
+  // leftovers of quantity phrasing
+  'about', 'approximately', 'plus', 'more', 'taste', 'optional', 'each',
+])
+
+/**
+ * The comparable core of an item or ingredient name: lowercased, singular,
+ * with descriptors removed. Falls back to the plain words rather than
+ * returning nothing when a name is all descriptor.
+ */
+export function foodTokens(raw: string): string[] {
+  const words = normalizeItemName(raw)
+    .split(' ')
+    .map((w) => singularize(w))
+    .filter((w) => w.length > 1)
+  const kept = words.filter((w) => !DESCRIPTOR_WORDS.has(w))
+  return kept.length > 0 ? kept : words
+}
+
 /** Crude singularization, good enough for ingredient matching. */
 export function singularize(name: string): string {
   return name
@@ -39,7 +80,9 @@ export function singularize(name: string): string {
         ? `${w.slice(0, -3)}y`
         : w.endsWith('oes') && w.length > 4
           ? w.slice(0, -2)
-          : w.endsWith('s') && !w.endsWith('ss') && w.length > 3
+          : // "ss" and "us" are never plural endings — molasses, asparagus,
+            // couscous, hummus, citrus.
+            w.endsWith('s') && !w.endsWith('ss') && !w.endsWith('us') && w.length > 3
             ? w.slice(0, -1)
             : w,
     )
