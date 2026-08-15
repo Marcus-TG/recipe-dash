@@ -128,14 +128,43 @@ basil" — and never blocks anything), `cook_sessions` + lines, `llm_jobs`
 
 1. Poller (or an optional Paperless/n8n webhook — both idempotent by
    `paperless_doc_id`) spots a new receipt-tagged doc, caches its OCR text.
-2. **Deterministic pass, no network:** detect store, segment lines, drop junk
-   (SUBTOTAL/TAX/loyalty rows), look up each line in `aliases` — hits resolve
-   instantly with pre-filled quantities.
+2. **Deterministic pass, no network:** detect store, read the receipt's
+   structure, look up each line in `aliases` — hits resolve instantly with
+   pre-filled quantities.
    - The Paperless tag covers *all* receipts, not just groceries. Stores carry
      a `non_grocery` flag: dismissing a receipt from a store once ("not
      groceries") sets it, and future receipts from that store auto-skip
      without review or LLM calls. Unknown stores get a cheap "is this
      groceries at all?" triage at the start of the LLM pass.
+
+**Reading the structure, not just the lines.** A receipt is items interleaved
+with department headers, and anything sold loose prints its weight on the
+*next* line. Taking it a line at a time throws both away, so `receipt-structure`
+does three things first:
+
+- **Department headers** (`27-PRODUCE`, `31-MEATS`, a bare `Meat`) carry down
+  the lines beneath them. Matching is fuzzy because OCR renders them
+  `31-HEATS` and `35-DELT`. They become the category default and go to the
+  model as context. Once a `TOTAL` line appears, everything after it is
+  terminal receipt and marketing — parsing stops there.
+- **Weight lines** (`0.125 kg @ $8.80/kg 1.10`) fold up into the item above.
+  When OCR destroys the weight itself (`i a kg @ $17.61/kg 8.28`), the rate and
+  the total survive and weight = total ÷ rate — the arithmetic you'd otherwise
+  do by hand at the review screen. A rate line that can't be read is still
+  never emitted as an item; losing a quantity beats inventing a purchase.
+- **Product codes** are extracted and kept. This is the important one: the
+  alias table keys on the code when there is one, because the digits survive
+  OCR that mangles `CANP BROTH CHICK` into `CAMP BROTM CHICK`, and they don't
+  change when the store rewords its abbreviations. UPCs and PLUs are global;
+  store SKUs stay store-scoped.
+
+**Produce codes resolve with no model at all.** PLU codes are an IFPS standard,
+so `4053` is lemons in every shop on earth — correct even when the text beside
+it reads `LEHON`. `src/domain/plu.ts` holds the table, reduced to generic food
+names (grade and pack words dropped, colour and variety kept). Codes the IFPS
+reserves for retailer use are omitted, and a short code is only read as a PLU
+under a produce header — otherwise the shop's own street address parses as
+Anjou pears.
 3. Unmatched lines go to **one** LLM job for the whole receipt (batched, with
    store context — better results and politer to forte than per-line calls).
    gpt-oss:20b, structured output. All LLM output lands as *proposed*, never
@@ -150,9 +179,10 @@ basil" — and never blocks anything), `cook_sessions` + lines, `llm_jobs`
 immediately, unmatched lines show "awaiting parse" and retry with backoff. You
 can also resolve any line by hand. Nothing blocks, nothing is lost.
 
-First receipt from a store: mostly LLM proposals needing review. Fifth:
-mostly instant alias hits. That's the "gets smarter" requirement, made
-concrete.
+First receipt from a store: produce resolves from its PLU immediately, the
+rest are LLM proposals needing review. Second receipt: the codes you confirmed
+are recognised even though the OCR read every name differently. That's the
+"gets smarter" requirement, made concrete.
 
 ## Recipe ingestion
 

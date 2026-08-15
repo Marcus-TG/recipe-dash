@@ -89,21 +89,9 @@ export function singularize(name: string): string {
     .join(' ')
 }
 
-const JUNK_LINE =
-  /^(sub\s*total|total|tax|gst|pst|hst|qst|balance|change|cash|debit|credit|visa|master|interac|amex|auth|approved|appr|ref\s*#|term(inal)?|merchant|thank|points|loyalty|air\s*miles|pc\s*optimum|store\s*#|tel|phone|www\.|http|survey|customer copy|tender|amount|savings|you saved|# ?items|items? sold|no\.? of items|cardholder|account|aid:|tvr|tsi|entry method|contactless|invoice|receipt|order|date|time|cashier|register|lane|transaction|purchase|payment|round|deposit|bottle|enviro|recycl)/i
-
-const PRICE_ONLY = /^[\s$\d.,-]+$/
-
-/** Split raw OCR text into candidate item lines. Deterministic, no network. */
-export function segmentReceipt(rawText: string): string[] {
-  return rawText
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 2)
-    .filter((l) => !JUNK_LINE.test(l))
-    .filter((l) => !PRICE_ONLY.test(l))
-    .filter((l) => /[a-z]{2}/i.test(l))
-}
+// Segmenting a receipt lives in receipt-structure.ts now: reading it line by
+// line lost the department headers and the weight lines, which is where the
+// category and the quantity actually are.
 
 const UNICODE_FRACTIONS: Record<string, number> = {
   '½': 0.5,

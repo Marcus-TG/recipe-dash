@@ -49,6 +49,9 @@ export type ReceiptLine = {
   proposedName: string | null
   quantity: number | null
   unit: string | null
+  code: string | null
+  codeKind: string | null
+  department: string | null
   resolution: string
   status: string
 }

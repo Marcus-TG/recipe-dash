@@ -123,6 +123,7 @@ export function ReceiptReview() {
                 <div className="raw">{line.rawText}</div>
               </div>
               {line.resolution === 'alias' && <span className="chip plenty">known</span>}
+              {line.resolution === 'plu' && <span className="chip plenty">produce code</span>}
               {line.resolution === 'llm' && <span className="chip some">guess</span>}
             </div>
 

@@ -16,11 +16,14 @@ import {
   relinkUnresolvedIngredients,
   upsertAlias,
 } from '../domain/resolve.js'
+import { lookupPlu } from '../domain/plu.js'
 import {
-  normalizeReceiptText,
-  quantityFromReceiptLine,
-  segmentReceipt,
-} from '../domain/text.js'
+  type CodeKind,
+  codeAliasKey,
+  codeIsGlobal,
+  parseReceiptStructure,
+} from '../domain/receipt-structure.js'
+import { normalizeReceiptText, quantityFromReceiptLine } from '../domain/text.js'
 import { toBase, unitFamily } from '../domain/units.js'
 import { enqueue, registerHandler } from '../services/jobs.js'
 import { structured } from '../services/ollama.js'
@@ -126,32 +129,52 @@ export function createManualReceipt(input: {
   return db.select().from(receipts).where(eq(receipts.id, receipt.id)).get()!
 }
 
-/** Pass 1: segmentation + learned aliases. No network, works offline. */
+/** Pass 1: structure + learned aliases + PLU. No network, works offline. */
 export function parseReceiptDeterministic(receiptId: number) {
   const receipt = db.select().from(receipts).where(eq(receipts.id, receiptId)).get()
   if (!receipt) return
   db.delete(receiptLines).where(eq(receiptLines.receiptId, receiptId)).run()
 
-  const lines = segmentReceipt(receipt.rawText)
+  const lines = parseReceiptStructure(receipt.rawText)
   let unresolved = 0
 
-  lines.forEach((raw, idx) => {
-    const normalized = normalizeReceiptText(raw)
-    const alias = lookupAlias('receipt', normalized, receipt.storeId)
-    const embedded = quantityFromReceiptLine(raw)
-    const quantity = alias?.defaultQuantity ?? embedded.quantity
-    const unit = alias?.defaultUnit ?? embedded.unit
-    if (!alias) unresolved++
+  lines.forEach((line, idx) => {
+    // The code is the better key: it survives the OCR mangling the name, and a
+    // UPC or PLU means the same product in every store.
+    const alias =
+      (line.code && line.codeKind
+        ? lookupAlias(
+            'receipt',
+            codeAliasKey(line.codeKind, line.code),
+            codeIsGlobal(line.codeKind) ? null : receipt.storeId,
+          )
+        : null) ?? lookupAlias('receipt', normalizeReceiptText(line.rawText), receipt.storeId)
+
+    const embedded = quantityFromReceiptLine(line.rawText)
+    // A weight folded up from the line below beats anything embedded in the
+    // text — it's the amount the scale actually printed.
+    const quantity = line.quantity ?? alias?.defaultQuantity ?? embedded.quantity
+    const unit = line.unit ?? alias?.defaultUnit ?? embedded.unit
+
+    // Produce codes are standardised, so a known PLU names the food outright —
+    // no model needed, and it's right even when the text reads "LEHON".
+    const plu = line.codeKind === 'plu' ? lookupPlu(line.code!) : null
+    if (!alias && !plu) unresolved++
+
     db.insert(receiptLines)
       .values({
         receiptId,
         lineNo: idx,
-        rawText: raw,
+        rawText: line.rawText,
+        code: line.code,
+        codeKind: line.codeKind,
+        department: line.department,
         itemId: alias?.itemId ?? null,
+        proposedName: alias ? null : plu,
         quantity,
         unit,
         unitFamily: unitFamily(unit),
-        resolution: alias ? 'alias' : 'unresolved',
+        resolution: alias ? 'alias' : plu ? 'plu' : 'unresolved',
         status: 'proposed',
       })
       .run()
@@ -234,10 +257,15 @@ registerHandler('parse_receipt_lines', async (payload: { receiptId: number }) =>
       'of meat, the kind of flour — and drop everything else. ' +
       'Set is_item=false for totals, taxes, deposits, discounts, addresses, and anything that is ' +
       'not a purchased food or household product. ' +
+      'Some lines are tagged with the department they were printed under — trust it over the ' +
+      'abbreviation, so a mangled line under [meat] is a cut of meat, not a ready meal. ' +
+      'Use the department for the category too. ' +
       'Return one entry per numbered line, using that number as index. Never invent items.',
     user:
       `Store: ${store?.name ?? 'unknown'}\n\n` +
-      `Receipt lines:\n${pending.map((l, i) => `${i + 1}. ${l.rawText}`).join('\n')}`,
+      `Receipt lines:\n${pending
+        .map((l, i) => `${i + 1}. ${l.department ? `[${l.department}] ` : ''}${l.rawText}`)
+        .join('\n')}`,
   })
 
   // Triage: a whole receipt of non-groceries gets flagged, not force-fed
@@ -325,7 +353,9 @@ export function confirmReceipt(receiptId: number, input: ConfirmLine[]) {
       }
 
       const name = decision.name?.trim() || line.proposedName || line.rawText
-      const category = decision.category ?? undefined
+      // The department the line was printed under is a better default than
+      // "other" when nobody picked a category.
+      const category = decision.category ?? line.department ?? undefined
       const quantity = decision.quantity ?? line.quantity ?? 1
       const unit = decision.unit ?? line.unit ?? 'ea'
       const base = toBase(quantity, unit)
@@ -348,6 +378,9 @@ export function confirmReceipt(receiptId: number, input: ConfirmLine[]) {
         .where(eq(receiptLines.id, line.id))
         .run()
 
+      // Learn the text, and — when the line carried one — the code as well.
+      // The code is what makes the lesson stick: next month the OCR will read
+      // the name differently, but the digits will be the same.
       upsertAlias({
         domain: 'receipt',
         rawTextNormalized: normalizeReceiptText(line.rawText),
@@ -357,6 +390,20 @@ export function confirmReceipt(receiptId: number, input: ConfirmLine[]) {
         defaultUnit: unit,
         source: 'human',
       })
+      if (line.code && line.codeKind) {
+        const kind = line.codeKind as CodeKind
+        upsertAlias({
+          domain: 'receipt',
+          rawTextNormalized: codeAliasKey(kind, line.code),
+          // A weight varies shop to shop, so a loose-produce code teaches the
+          // item but never a default amount.
+          storeId: codeIsGlobal(kind) ? null : receipt.storeId,
+          itemId: item.id,
+          defaultQuantity: kind === 'plu' ? null : quantity,
+          defaultUnit: kind === 'plu' ? null : unit,
+          source: 'human',
+        })
+      }
 
       events.push({
         itemId: item.id,

@@ -131,6 +131,14 @@ export const receiptLines = sqliteTable(
     rawText: text('raw_text').notNull(),
     itemId: integer('item_id').references(() => items.id),
     proposedName: text('proposed_name'), // LLM's guess before an item exists
+    // The product code printed on the line, and what kind it is: upc | plu |
+    // sku. Worth more than the text beside it — it survives OCR and outlives
+    // the store rewording its abbreviations, so aliases key on it when present.
+    code: text('code'),
+    codeKind: text('code_kind'),
+    // Which department header this line fell under, already mapped to our
+    // category vocabulary. Free context for naming, and a category default.
+    department: text('department'),
     quantity: real('quantity'),
     unit: text('unit'),
     unitFamily: text('unit_family'),
