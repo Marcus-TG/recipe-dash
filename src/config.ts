@@ -13,6 +13,20 @@ const Env = z.object({
   OLLAMA_URL: z.string().optional(),
   OLLAMA_TEXT_MODEL: z.string().default('gpt-oss:20b'),
   OLLAMA_VISION_MODEL: z.string().optional(),
+
+  // Open Food Facts needs no account, so it's on by default — set this to
+  // false to keep receipt parsing entirely inside the house.
+  OPENFOODFACTS_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  OPENFOODFACTS_URL: z.string().default('https://world.openfoodfacts.org'),
+  // Their API asks every caller to identify itself as "App/Version (contact)".
+  // Defaults to the repo rather than a personal address, since it's sent to a
+  // third party on every request.
+  OPENFOODFACTS_CONTACT: z
+    .string()
+    .default('https://github.com/Marcus-TG/recipe-dash'),
 })
 
 export const config = Env.parse(process.env)

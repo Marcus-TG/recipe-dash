@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { config } from '../config.js'
 import { db } from '../db/client.js'
@@ -24,9 +24,15 @@ import {
   parseReceiptStructure,
 } from '../domain/receipt-structure.js'
 import { normalizeReceiptText, quantityFromReceiptLine } from '../domain/text.js'
-import { toBase, unitFamily } from '../domain/units.js'
+import { normalizeUnit, toBase, unitFamily } from '../domain/units.js'
 import { enqueue, registerHandler } from '../services/jobs.js'
 import { structured } from '../services/ollama.js'
+import {
+  lookupBarcode,
+  openFoodFactsConfigured,
+  ProductLookupUnavailableError,
+  type ProductFacts,
+} from '../services/openfoodfacts.js'
 import {
   correspondentName,
   fetchTaggedDocs,
@@ -218,6 +224,56 @@ const CATEGORIES = new Set([
   'dry', 'canned', 'condiment', 'beverage', 'other',
 ])
 
+/**
+ * Look up every barcoded line, and write what comes back to the line before
+ * the model is asked anything.
+ *
+ * Order matters: if forte is asleep the structured() call below throws and the
+ * job requeues, and these proposals are already saved. A barcode answer is
+ * still a *proposal* — nothing here is ever auto-confirmed.
+ *
+ * A lookup failure is never fatal. Rate limiting stops the batch (their ask,
+ * and the queue will come back to it), anything else just leaves the line for
+ * the model.
+ */
+async function lookupReceiptBarcodes(
+  lines: (typeof receiptLines.$inferSelect)[],
+): Promise<Map<number, ProductFacts>> {
+  const found = new Map<number, ProductFacts>()
+  if (!openFoodFactsConfigured()) return found
+
+  for (const line of lines) {
+    if (line.codeKind !== 'upc' || !line.code) continue
+    let facts: ProductFacts | null
+    try {
+      facts = await lookupBarcode(line.code)
+    } catch (err) {
+      if (err instanceof ProductLookupUnavailableError) break
+      throw err
+    }
+    if (!facts?.name) continue
+    found.set(line.id, facts)
+    db.update(receiptLines)
+      .set({
+        proposedName: facts.name.toLowerCase(),
+        // The pack size is the amount that entered the pantry — but never over
+        // a weight the scale actually printed.
+        ...(line.quantity == null && facts.quantity != null
+          ? {
+              quantity: facts.quantity,
+              unit: facts.unit,
+              unitFamily: unitFamily(facts.unit),
+            }
+          : {}),
+        ...(line.department == null && facts.category ? { department: facts.category } : {}),
+        resolution: 'barcode',
+      })
+      .where(eq(receiptLines.id, line.id))
+      .run()
+  }
+  return found
+}
+
 registerHandler('parse_receipt_lines', async (payload: { receiptId: number }) => {
   const receipt = db
     .select()
@@ -226,13 +282,16 @@ registerHandler('parse_receipt_lines', async (payload: { receiptId: number }) =>
     .get()
   if (!receipt || receipt.status === 'confirmed' || receipt.status === 'dismissed') return
 
+  // Barcode-resolved lines come back into the batch on a retry: the lookup is
+  // cached so it costs nothing, and it gives the model a second chance to turn
+  // "Pâte de tomates" into the English name once forte is awake again.
   const pending = db
     .select()
     .from(receiptLines)
     .where(
       and(
         eq(receiptLines.receiptId, receipt.id),
-        eq(receiptLines.resolution, 'unresolved'),
+        inArray(receiptLines.resolution, ['unresolved', 'barcode']),
       ),
     )
     .all()
@@ -241,6 +300,11 @@ registerHandler('parse_receipt_lines', async (payload: { receiptId: number }) =>
   const store = receipt.storeId
     ? db.select().from(stores).where(eq(stores.id, receipt.storeId)).get()
     : null
+
+  // Rung above the model: ask what the barcode actually is. Written to the
+  // line straight away so it survives forte being asleep — the model refines
+  // these below, it isn't required to produce them.
+  const facts = await lookupReceiptBarcodes(pending)
 
   // One call for the whole receipt: cheaper, and the model does better with
   // sibling lines as context than with isolated ones.
@@ -260,11 +324,24 @@ registerHandler('parse_receipt_lines', async (payload: { receiptId: number }) =>
       'Some lines are tagged with the department they were printed under — trust it over the ' +
       'abbreviation, so a mangled line under [meat] is a cut of meat, not a ready meal. ' +
       'Use the department for the category too. ' +
+      'A line may also carry "barcode:" — the real product, looked up from the barcode printed ' +
+      'on it. That is what was actually bought, so trust it over the abbreviation when they ' +
+      'disagree, and translate it if it is not in English. Still answer with the generic food: ' +
+      'the brand is given separately so you can drop it. ' +
       'Return one entry per numbered line, using that number as index. Never invent items.',
     user:
       `Store: ${store?.name ?? 'unknown'}\n\n` +
       `Receipt lines:\n${pending
-        .map((l, i) => `${i + 1}. ${l.department ? `[${l.department}] ` : ''}${l.rawText}`)
+        .map((l, i) => {
+          const f = facts.get(l.id)
+          // Name and brand only. Showing the pack size here made the model
+          // copy it into the unit field ("unit": "900 ml") — and the pack size
+          // has already been applied deterministically anyway.
+          const barcode = f
+            ? ` (barcode: ${[f.name, f.brand && `by ${f.brand}`].filter(Boolean).join(', ')})`
+            : ''
+          return `${i + 1}. ${l.department ? `[${l.department}] ` : ''}${l.rawText}${barcode}`
+        })
         .join('\n')}`,
   })
 
@@ -289,13 +366,30 @@ registerHandler('parse_receipt_lines', async (payload: { receiptId: number }) =>
         .run()
       return
     }
-    const unit = match.unit?.trim() || null
+    // Re-read: the barcode pass may have written a quantity onto this line
+    // after `pending` was captured.
+    const current = db
+      .select()
+      .from(receiptLines)
+      .where(eq(receiptLines.id, line.id))
+      .get()!
+    // A scale reading or a printed pack size is a measurement; the model's
+    // quantity is a guess. Measurements win, and an unrecognised unit is
+    // dropped rather than stored — that's how "900 ml" ended up as a unit.
+    const modelUnit = normalizeUnit(match.unit)
+    const measured = current.quantity != null
+    const quantity = measured
+      ? current.quantity
+      : match.quantity > 0
+        ? match.quantity
+        : null
+    const unit = measured ? current.unit : (modelUnit ?? current.unit)
     db.update(receiptLines)
       .set({
         proposedName: match.name.trim().toLowerCase(),
-        quantity: match.quantity > 0 ? match.quantity : line.quantity,
-        unit: unit ?? line.unit,
-        unitFamily: unitFamily(unit ?? line.unit),
+        quantity,
+        unit,
+        unitFamily: unitFamily(unit),
         resolution: 'llm',
       })
       .where(eq(receiptLines.id, line.id))

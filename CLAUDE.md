@@ -34,6 +34,12 @@ Real values live in the homelab repo: `stacks/recipe-dash/.env.example`.
 Ollama on forte is reachable during dev at `http://forte:11434`
 (models: gpt-oss:20b for text, a Qwen 27B VL for vision).
 
+Open Food Facts is the one dependency that's ON by default, since it needs no
+account — set `OPENFOODFACTS_ENABLED=false` to keep receipt parsing entirely
+in-house. `OPENFOODFACTS_CONTACT` is the "who is calling" string their API
+asks for; it defaults to the repo URL rather than a personal address because
+it goes to a third party on every request.
+
 ## Deploy
 
 Push to `main` → GitHub Action builds `ghcr.io/marcus-tg/recipe-dash:latest`

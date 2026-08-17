@@ -21,6 +21,11 @@ export function normalizeItemName(raw: string): string {
   return (
     raw
       .toLowerCase()
+      // Accents are folded, not deleted: "pâte" must become "pate", not
+      // "p te". Canadian packaging is bilingual and half of what a barcode
+      // lookup returns is French.
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
       // Variant detail belongs in the alias, not the canonical item:
       // "milk (2%)" and "olive oil (extra virgin)" are milk and olive oil.
       .replace(/\([^)]*\)/g, ' ')

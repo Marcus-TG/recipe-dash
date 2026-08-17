@@ -165,18 +165,40 @@ names (grade and pack words dropped, colour and variety kept). Codes the IFPS
 reserves for retailer use are omitted, and a short code is only read as a PLU
 under a produce header — otherwise the shop's own street address parses as
 Anjou pears.
-3. Unmatched lines go to **one** LLM job for the whole receipt (batched, with
-   store context — better results and politer to forte than per-line calls).
-   gpt-oss:20b, structured output. All LLM output lands as *proposed*, never
-   auto-confirmed.
-4. Receipt hits the phone confirm queue. Confirming runs one transaction:
+3. **Barcodes, before the model:** any line still unmatched that carries a UPC
+   is looked up in Open Food Facts. Optional and on by default (no account
+   needed); off or unreachable just drops to the next rung.
+   - Receipts print the 11 significant digits and omit the check digit, so it
+     has to be recomputed — `06321112114` is really `063211121148`.
+   - Worth the network call for two things the receipt can't give us: the
+     **brand as its own field**, so stripping it from the name is exact rather
+     than guesswork, and the **pack size**, so a carton of broth enters the
+     pantry as 900 ml instead of "1 each".
+   - Answers are cached in `product_codes` forever, misses included — a
+     barcode never changes meaning. Their limit is 15 reads/min/IP, so calls
+     are paced and a 429 stops the batch for the queue to retry.
+4. Unmatched lines go to **one** LLM job for the whole receipt (batched, with
+   store, department and barcode context — better results and politer to forte
+   than per-line calls). gpt-oss:20b, structured output. All output lands as
+   *proposed*, never auto-confirmed.
+   - The barcode facts go *into* the prompt rather than replacing the model:
+     alone, the model read a bag of Miss Vickie's crisps as pasta sauce, and
+     Open Food Facts alone called the tomato paste "Pâte de tomates". Together
+     they get it right. The pack size is deliberately withheld from the prompt
+     — showing it made the model answer `"unit": "900 ml"`.
+   - A measured quantity (scale line, or printed pack size) always beats the
+     model's guess, and a unit it doesn't recognise is dropped rather than
+     stored.
+5. Receipt hits the phone confirm queue. Confirming runs one transaction:
    purchase events + alias upserts for every confirmed line + state update.
-5. **Vision fallback, not default:** if the OCR-text parse looks broken, or
+6. **Vision fallback, not default:** if the OCR-text parse looks broken, or
    you tap "reparse from image", fetch the image from Paperless and run the
    Qwen VL model instead. Same review flow.
 
 **forte offline:** step 2 still works, alias-matched lines are confirmable
-immediately, unmatched lines show "awaiting parse" and retry with backoff. You
+immediately, unmatched lines show "awaiting parse" and retry with backoff. The
+barcode pass runs before the model call and commits as it goes, so those names
+and pack sizes are already on the lines when forte turns out to be asleep. You
 can also resolve any line by hand. Nothing blocks, nothing is lost.
 
 First receipt from a store: produce resolves from its PLU immediately, the

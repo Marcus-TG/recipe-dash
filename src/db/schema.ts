@@ -106,6 +106,23 @@ export const aliases = sqliteTable(
   ],
 )
 
+// What a barcode turned out to be. Permanent by nature — a UPC identifies the
+// same product forever — so this is a cache with no expiry, and it's what lets
+// a second look at the same product cost nothing and work offline.
+// Misses are stored too: "not in Open Food Facts" is worth remembering.
+export const productCodes = sqliteTable('product_codes', {
+  code: text('code').primaryKey(), // the normalized barcode we queried with
+  found: integer('found', { mode: 'boolean' }).notNull().default(false),
+  name: text('name'),
+  brand: text('brand'),
+  quantityText: text('quantity_text'), // as printed: "900ml", "398 g"
+  quantity: real('quantity'),
+  unit: text('unit'),
+  category: text('category'),
+  source: text('source').notNull().default('openfoodfacts'),
+  fetchedAt: ts('fetched_at').notNull().$defaultFn(now),
+})
+
 export const receipts = sqliteTable('receipts', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   paperlessDocId: integer('paperless_doc_id').unique(), // idempotency key

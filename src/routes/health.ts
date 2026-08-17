@@ -2,6 +2,10 @@ import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 import { config } from '../config.js'
+import {
+  openFoodFactsConfigured,
+  openFoodFactsReachable,
+} from '../services/openfoodfacts.js'
 import { version } from '../version.js'
 
 const CheckResult = z.enum(['ok', 'unconfigured', 'unreachable', 'error'])
@@ -12,6 +16,7 @@ const HealthResponse = z.object({
   checks: z.object({
     paperless: CheckResult,
     ollama: CheckResult,
+    openfoodfacts: CheckResult,
   }),
 })
 
@@ -37,7 +42,7 @@ export async function healthRoutes(app: FastifyInstance) {
       response: { 200: HealthResponse },
     },
     handler: async () => {
-      const [paperless, ollama] = await Promise.all([
+      const [paperless, ollama, openfoodfacts] = await Promise.all([
         config.PAPERLESS_URL && config.PAPERLESS_API_TOKEN
           ? probe(`${config.PAPERLESS_URL}/api/`, {
               Authorization: `Token ${config.PAPERLESS_API_TOKEN}`,
@@ -46,14 +51,19 @@ export async function healthRoutes(app: FastifyInstance) {
         config.OLLAMA_URL
           ? probe(`${config.OLLAMA_URL}/api/tags`)
           : ('unconfigured' as const),
+        openFoodFactsConfigured()
+          ? (await openFoodFactsReachable())
+            ? ('ok' as const)
+            : ('unreachable' as const)
+          : ('unconfigured' as const),
       ])
-      const degraded = [paperless, ollama].some(
+      const degraded = [paperless, ollama, openfoodfacts].some(
         (c) => c === 'unreachable' || c === 'error',
       )
       return {
         status: degraded ? ('degraded' as const) : ('ok' as const),
         version,
-        checks: { paperless, ollama },
+        checks: { paperless, ollama, openfoodfacts },
       }
     },
   })
