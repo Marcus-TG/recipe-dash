@@ -18,6 +18,23 @@ export function ReceiptReview() {
   const [decisions, setDecisions] = useState<Record<number, Decision>>({})
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState<number | null>(null)
+  const [rereading, setRereading] = useState(false)
+
+  /**
+   * Throw away the proposed lines and read the receipt from scratch. Needed
+   * whenever the parser improves — the lines on screen were written by
+   * whatever version was running when the receipt arrived, and nothing
+   * re-reads them on its own.
+   */
+  const reread = async () => {
+    setRereading(true)
+    try {
+      await post(`/receipts/${id}/reparse`)
+      reload()
+    } finally {
+      setRereading(false)
+    }
+  }
 
   // Seed from the server's proposals: anything it resolved defaults to
   // "confirm", anything it couldn't name defaults to "ignore".
@@ -105,6 +122,16 @@ export function ReceiptReview() {
         <p className="sub" style={{ marginBottom: '0.75rem' }}>
           <span className="spinner" /> forte is reading the unfamiliar lines…
         </p>
+      )}
+
+      {!isDone && (
+        <button
+          className="btn ghost block"
+          disabled={rereading}
+          onClick={() => void reread()}
+        >
+          {rereading ? 'Reading it again…' : 'Read this receipt again'}
+        </button>
       )}
 
       {data.lines.map((line) => {

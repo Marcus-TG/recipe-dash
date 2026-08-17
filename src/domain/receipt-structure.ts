@@ -206,11 +206,13 @@ const RATE_LINE = /(\d\s*(kg|lbs?|g)\s*@)|(@\s*\$?\s*\d+[.,]\d)/i
  * each weight line up into the item it belongs to.
  */
 export function parseReceiptStructure(rawText: string): StructuredLine[] {
-  const out: StructuredLine[] = []
+  let out: StructuredLine[] = []
   let department: string | null = null
   // The letterhead is over once the first department header appears. Until
   // then a four-digit number is an address, not a PLU.
   let inItemBody = false
+  // Where the letterhead ended, so it can be cut once we know there was one.
+  let itemsStartAt = 0
 
   for (const raw of rawText.split(/\r?\n/)) {
     const line = raw.trim()
@@ -223,7 +225,14 @@ export function parseReceiptStructure(rawText: string): StructuredLine[] {
     const dept = departmentOf(line)
     if (dept !== undefined) {
       department = dept
-      inItemBody = true
+      if (!inItemBody) {
+        // Everything above the first department header is letterhead — store
+        // name, address, owner, date. Left in, the model dutifully turns them
+        // into food: "FORT BURLINGTON APPLEBY" became apples and the owner,
+        // "Kyle Rabb", became rabbit.
+        inItemBody = true
+        itemsStartAt = out.length
+      }
       continue
     }
 
@@ -254,6 +263,12 @@ export function parseReceiptStructure(rawText: string): StructuredLine[] {
       quantity: code?.multiplier ?? null,
       unit: code?.multiplier != null ? 'ea' : null,
     })
+  }
+
+  // Only drop the letterhead if this receipt actually had a department header.
+  // Plenty don't, and on those every line is all we have.
+  if (inItemBody && itemsStartAt > 0) {
+    out = out.slice(itemsStartAt).map((l, i) => ({ ...l, lineNo: i }))
   }
   return out
 }

@@ -150,6 +150,11 @@ does three things first:
     words can't be trusted — `36-HOME MEAL REPLACEMENT` arrives as `36-HONE
     WEAL REPLACENENT`, three letters wrong, and was being bought. A header we
     can't map to a category is still a header, and still skipped.
+  - The first header also marks the end of the **letterhead**, and everything
+    above it is dropped. Left in, the model dutifully turns it into food:
+    "FORT BURLINGTON APPLEBY" became apples and the owner "Kyle Rabb" became
+    rabbit. Only applied when the receipt has a header at all — on one that
+    doesn't, every line is all we have.
 - **Weight lines** (`0.125 kg @ $8.80/kg 1.10`) fold up into the item above.
   When OCR destroys the weight itself (`i a kg @ $17.61/kg 8.28`), the rate and
   the total survive and weight = total ÷ rate — the arithmetic you'd otherwise
@@ -200,6 +205,10 @@ it exists to stop (a shop's street address, `4025 New Street`, reading as PLU
      stored.
 5. Receipt hits the phone confirm queue. Confirming runs one transaction:
    purchase events + alias upserts for every confirmed line + state update.
+   - "Read this receipt again" throws the proposals away and re-parses. Lines
+     are written by whichever parser version was running when the receipt
+     arrived and nothing re-reads them on its own, so improving the parser
+     does nothing to a receipt already sitting in the queue without it.
 6. **Vision fallback, not default:** if the OCR-text parse looks broken, or
    you tap "reparse from image", fetch the image from Paperless and run the
    Qwen VL model instead. Same review flow.
