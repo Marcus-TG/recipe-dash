@@ -143,10 +143,13 @@ with department headers, and anything sold loose prints its weight on the
 does three things first:
 
 - **Department headers** (`27-PRODUCE`, `31-MEATS`, a bare `Meat`) carry down
-  the lines beneath them. Matching is fuzzy because OCR renders them
-  `31-HEATS` and `35-DELT`. They become the category default and go to the
-  model as context. Once a `TOTAL` line appears, everything after it is
-  terminal receipt and marketing — parsing stops there.
+  the lines beneath them. They become the category default and go to the model
+  as context. Once a `TOTAL` line appears, everything after it is terminal
+  receipt and marketing — parsing stops there.
+  - Recognised by *shape* first: two digits, a dash, capitals, no price. The
+    words can't be trusted — `36-HOME MEAL REPLACEMENT` arrives as `36-HONE
+    WEAL REPLACENENT`, three letters wrong, and was being bought. A header we
+    can't map to a category is still a header, and still skipped.
 - **Weight lines** (`0.125 kg @ $8.80/kg 1.10`) fold up into the item above.
   When OCR destroys the weight itself (`i a kg @ $17.61/kg 8.28`), the rate and
   the total survive and weight = total ÷ rate — the arithmetic you'd otherwise
@@ -156,15 +159,21 @@ does three things first:
   alias table keys on the code when there is one, because the digits survive
   OCR that mangles `CANP BROTH CHICK` into `CAMP BROTM CHICK`, and they don't
   change when the store rewords its abbreviations. UPCs and PLUs are global;
-  store SKUs stay store-scoped.
+  store SKUs stay store-scoped. A multi-buy prefix (`(2)05590000399`) is read
+  as a count of packages rather than allowed to hide the code.
 
 **Produce codes resolve with no model at all.** PLU codes are an IFPS standard,
 so `4053` is lemons in every shop on earth — correct even when the text beside
 it reads `LEHON`. `src/domain/plu.ts` holds the table, reduced to generic food
 names (grade and pack words dropped, colour and variety kept). Codes the IFPS
-reserves for retailer use are omitted, and a short code is only read as a PLU
-under a produce header — otherwise the shop's own street address parses as
-Anjou pears.
+reserves for retailer use are omitted.
+
+A short code counts as a PLU only once the receipt has started listing things
+— after the first department header. The guard is about POSITION, not
+department: stores file produce under their grocery header often enough that
+requiring a *produce* header missed real limes and jalapeños, while the thing
+it exists to stop (a shop's street address, `4025 New Street`, reading as PLU
+4025 Anjou pears) is always in the letterhead above any header.
 3. **Barcodes, before the model:** any line still unmatched that carries a UPC
    is looked up in Open Food Facts. Optional and on by default (no account
    needed); off or unreachable just drops to the next rung.
