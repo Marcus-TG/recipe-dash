@@ -12,6 +12,7 @@ import {
 } from 'fastify-type-provider-zod'
 import { config } from './config.js'
 import { cookRoutes } from './routes/cook.js'
+import { groceryRoutes } from './routes/grocery.js'
 import { healthRoutes } from './routes/health.js'
 import { itemRoutes } from './routes/items.js'
 import { receiptRoutes } from './routes/receipts.js'
@@ -51,6 +52,7 @@ export async function buildServer() {
       await api.register(receiptRoutes)
       await api.register(recipeRoutes)
       await api.register(cookRoutes)
+      await api.register(groceryRoutes)
     },
     { prefix: '/api' },
   )

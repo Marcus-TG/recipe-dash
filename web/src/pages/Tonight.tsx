@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useFetch } from '../api'
+import { post, useFetch } from '../api'
 import { Thumb } from '../components/Thumb'
 import type { RecipeMatch } from '../types'
 
@@ -12,44 +12,61 @@ const HEADINGS: Record<RecipeMatch['verdict'], string> = {
 }
 
 function MatchCard({ match }: { match: RecipeMatch }) {
+  const [listed, setListed] = useState(false)
+
+  // The card can't be one big <Link> any more: planning a shop from this screen
+  // means adding several recipes without leaving it, and a button inside an
+  // anchor is neither valid nor tappable in the way you'd want.
   return (
-    <Link className="card" to={`/recipes/${match.recipeId}`}>
-      <div className="row">
-        <Thumb src={match.thumbnail} alt="" />
-        <div className="grow">
-          <div className="card-title">
-            <span className="grow">{match.title}</span>
-            <span className={`chip ${match.verdict}`}>
-              {match.verdict === 'cookable'
-                ? 'ready'
-                : match.verdict === 'check_shelf'
-                  ? 'check'
-                  : `${match.missing.length} short`}
-            </span>
+    <div className="card">
+      <Link className="match-body" to={`/recipes/${match.recipeId}`}>
+        <div className="row">
+          <Thumb src={match.thumbnail} alt="" />
+          <div className="grow">
+            <div className="card-title">
+              <span className="grow">{match.title}</span>
+              <span className={`chip ${match.verdict}`}>
+                {match.verdict === 'cookable'
+                  ? 'ready'
+                  : match.verdict === 'check_shelf'
+                    ? 'check'
+                    : `${match.missing.length} short`}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
-      {match.usesUp.length > 0 && (
-        <div style={{ marginTop: '0.5rem' }}>
-          <span className="chip uses-up">uses up: {match.usesUp.join(', ')}</span>
-        </div>
-      )}
-      {match.missing.length > 0 && (
-        <p className="sub" style={{ marginTop: '0.4rem' }}>
-          grab {match.missing.join(', ')}
-        </p>
-      )}
-      {match.uncertain.length > 0 && (
-        <p className="sub" style={{ marginTop: '0.4rem' }}>
-          not sure about {match.uncertain.join(', ')}
-        </p>
-      )}
-      {match.untracked.length > 2 && (
-        <p className="sub" style={{ marginTop: '0.4rem' }}>
-          doesn’t track {match.untracked.length} of its ingredients
-        </p>
-      )}
-    </Link>
+        {match.usesUp.length > 0 && (
+          <div style={{ marginTop: '0.5rem' }}>
+            <span className="chip uses-up">uses up: {match.usesUp.join(', ')}</span>
+          </div>
+        )}
+        {match.missing.length > 0 && (
+          <p className="sub" style={{ marginTop: '0.4rem' }}>
+            grab {match.missing.join(', ')}
+          </p>
+        )}
+        {match.uncertain.length > 0 && (
+          <p className="sub" style={{ marginTop: '0.4rem' }}>
+            not sure about {match.uncertain.join(', ')}
+          </p>
+        )}
+        {match.untracked.length > 2 && (
+          <p className="sub" style={{ marginTop: '0.4rem' }}>
+            doesn’t track {match.untracked.length} of its ingredients
+          </p>
+        )}
+      </Link>
+      <button
+        className="btn ghost small match-add"
+        disabled={listed}
+        onClick={() => {
+          setListed(true)
+          void post('/grocery/list/recipes', { recipeId: match.recipeId })
+        }}
+      >
+        {listed ? '✓ on the shopping list' : '🛒 add to shopping list'}
+      </button>
+    </div>
   )
 }
 

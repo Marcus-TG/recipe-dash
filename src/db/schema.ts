@@ -251,3 +251,76 @@ export const llmJobs = sqliteTable(
   },
   (t) => [index('llm_jobs_status_idx').on(t.status, t.runAfter)],
 )
+
+// ---------------------------------------------------------------------------
+// Grocery mode
+//
+// A shopping list is DERIVED, not stored: what you need is (the recipes on the
+// list) minus (what the pantry says you have), computed at read time. Storing
+// the answer would rot the moment you confirmed a receipt — the same reason
+// confidence isn't stored. What IS stored is the small set of things the
+// computation can't know: which recipes you put on it, what you added by hand,
+// and which rows you've already dropped in the cart.
+//
+// Ticking a row does NOT write to the pantry ledger. The receipt is what says
+// you bought something; a checkbox in a shop is a memory aid. Writing purchase
+// events here would double-count against the receipt that follows.
+// ---------------------------------------------------------------------------
+
+export const groceryLists = sqliteTable('grocery_lists', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().default('Shopping'),
+  status: text('status').notNull().default('active'), // active | archived
+  createdAt: ts('created_at').notNull().$defaultFn(now),
+  completedAt: ts('completed_at'),
+})
+
+export const groceryListRecipes = sqliteTable(
+  'grocery_list_recipes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    listId: integer('list_id')
+      .notNull()
+      .references(() => groceryLists.id, { onDelete: 'cascade' }),
+    recipeId: integer('recipe_id')
+      .notNull()
+      .references(() => recipes.id, { onDelete: 'cascade' }),
+    // What you're actually cooking for, which may not be what the recipe says.
+    // Ingredient amounts scale by servings / recipe.servings.
+    servings: integer('servings'),
+    addedAt: ts('added_at').notNull().$defaultFn(now),
+  },
+  (t) => [
+    uniqueIndex('grocery_list_recipes_key_idx').on(t.listId, t.recipeId),
+  ],
+)
+
+// Two jobs in one table, told apart by `source`:
+//   manual  — a row that exists only because you typed it ("paper towels")
+//   derived — a row that exists only to carry the checkbox for a computed
+//             need. It is never displayed on its own; if the recipes stop
+//             asking for it, it simply stops being consulted, which is why
+//             removing a recipe leaves no orphans to clean up.
+// `key` is what joins a decision to its computed need: "item:12" when the
+// ingredient resolved to a pantry item, "text:canned tomatoes" when it didn't.
+export const groceryListLines = sqliteTable(
+  'grocery_list_lines',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    listId: integer('list_id')
+      .notNull()
+      .references(() => groceryLists.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    label: text('label').notNull(),
+    itemId: integer('item_id').references(() => items.id),
+    quantity: real('quantity'),
+    unit: text('unit'),
+    source: text('source').notNull().default('manual'), // manual | derived
+    checked: integer('checked', { mode: 'boolean' }).notNull().default(false),
+    dismissed: integer('dismissed', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    createdAt: ts('created_at').notNull().$defaultFn(now),
+  },
+  (t) => [uniqueIndex('grocery_list_lines_key_idx').on(t.listId, t.key)],
+)

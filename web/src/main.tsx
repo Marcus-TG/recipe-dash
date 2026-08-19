@@ -10,6 +10,7 @@ import { Pantry } from './pages/Pantry'
 import { ReceiptReview } from './pages/ReceiptReview'
 import { RecipeDetail } from './pages/RecipeDetail'
 import { Recipes } from './pages/Recipes'
+import { Shopping } from './pages/Shopping'
 import { Tonight } from './pages/Tonight'
 import './styles.css'
 
@@ -28,6 +29,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/inbox/:id" element={<ReceiptReview />} />
           <Route path="/recipes" element={<Recipes />} />
           <Route path="/recipes/:id" element={<RecipeDetail />} />
+          <Route path="/shopping" element={<Shopping />} />
         </Route>
       </Routes>
     </BrowserRouter>

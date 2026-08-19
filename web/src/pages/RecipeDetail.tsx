@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { del, patch, useFetch } from '../api'
+import { del, patch, post, useFetch } from '../api'
 import { RecipeChat } from '../components/RecipeChat'
 import { RecipeImage } from '../components/RecipeImage'
 import type { IngredientCheck, Recipe, RecipeIngredient, RecipeMatch } from '../types'
@@ -27,6 +27,7 @@ export function RecipeDetail() {
   const [fixName, setFixName] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [listed, setListed] = useState(false)
 
   // Still being parsed — poll until it lands.
   useEffect(() => {
@@ -42,6 +43,11 @@ export function RecipeDetail() {
     setFixing(null)
     setFixName('')
     reload()
+  }
+
+  const addToList = async () => {
+    await post('/grocery/list/recipes', { recipeId: Number(id) })
+    setListed(true)
   }
 
   const remove = async () => {
@@ -140,71 +146,95 @@ export function RecipeDetail() {
             </div>
           )}
 
-          <button
-            className="btn primary block"
-            onClick={() => navigate(`/recipes/${recipe.id}/cook`)}
-          >
-            Start cooking
-          </button>
+          <div className="btn-row">
+            <button
+              className="btn primary grow"
+              onClick={() => navigate(`/recipes/${recipe.id}/cook`)}
+            >
+              Start cooking
+            </button>
+            {/* Shopping for several recipes at once is the point: the list
+                merges what they all need before subtracting the pantry. */}
+            <button
+              className="btn"
+              disabled={listed}
+              onClick={() => void addToList()}
+            >
+              {listed ? '🛒 On the list' : '🛒 Add to list'}
+            </button>
+          </div>
+          {listed && (
+            <p className="sub note">
+              <Link to="/shopping">See the shopping list ›</Link>
+            </p>
+          )}
         </div>
       </div>
 
       <div className="detail-cols">
         <section className="section">
           <div className="section-label">Ingredients</div>
-          {ingredients.map((ing) => {
-            const check = checkByIngredient.get(ing.id)
-            return (
-              <div className="card" key={ing.id}>
-                <div className="row-between">
-                  <span className="grow">{ing.rawText}</span>
-                  {check && (
-                    <span className={`chip ${check.verdict}`}>
-                      {VERDICT_WORDS[check.verdict]}
-                    </span>
-                  )}
-                </div>
-                {check?.detail && <p className="sub">{check.detail}</p>}
-
-                {fixing === ing.id ? (
-                  <div style={{ marginTop: '0.6rem' }}>
-                    <div className="field">
-                      <label>Which pantry item is this?</label>
-                      <input
-                        type="text"
-                        autoFocus
-                        value={fixName}
-                        placeholder={ing.itemName ?? 'e.g. canned tomatoes'}
-                        onChange={(e) => setFixName(e.target.value)}
-                      />
-                    </div>
-                    <div className="btn-row">
-                      <button
-                        className="btn primary grow"
-                        onClick={() => void saveFix(ing.id)}
-                      >
-                        Remember this
-                      </button>
-                      <button className="btn ghost" onClick={() => setFixing(null)}>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
+          {/* One line per ingredient. A recipe's ingredient list is something
+              you read at a glance, so the pantry verdict is a coloured dot and
+              a short word rather than a chip on a card of its own — the "which
+              pantry item is this?" editor opens on tap, for the rare line that
+              needs it. */}
+          <div className="card" style={{ padding: '0.25rem 0.35rem' }}>
+            {ingredients.map((ing) => {
+              const check = checkByIngredient.get(ing.id)
+              const open = fixing === ing.id
+              return (
+                <div className="ing-row" key={ing.id}>
                   <button
-                    className="btn ghost"
-                    style={{ marginTop: '0.5rem', minHeight: 40 }}
+                    className="ing-tap"
                     onClick={() => {
-                      setFixing(ing.id)
+                      setFixing(open ? null : ing.id)
                       setFixName(ing.itemName ?? '')
                     }}
                   >
-                    {ing.itemId ? `→ ${ing.itemName}` : 'Link to a pantry item'}
+                    <span className={`ing-dot ${check?.verdict ?? 'untracked'}`} />
+                    <span className="ing-text">{ing.rawText}</span>
                   </button>
-                )}
-              </div>
-            )
-          })}
+                  <span className="ing-why">
+                    {check ? VERDICT_WORDS[check.verdict] : ''}
+                  </span>
+                  {open && (
+                    <div className="ing-edit">
+                      <div className="field">
+                        <label>Which pantry item is this?</label>
+                        <input
+                          type="text"
+                          autoFocus
+                          value={fixName}
+                          placeholder={ing.itemName ?? 'e.g. canned tomatoes'}
+                          onChange={(e) => setFixName(e.target.value)}
+                        />
+                      </div>
+                      {check?.detail && (
+                        <p className="sub" style={{ marginBottom: '0.6rem' }}>
+                          {check.detail}
+                        </p>
+                      )}
+                      <div className="btn-row">
+                        <button
+                          className="btn primary grow"
+                          onClick={() => void saveFix(ing.id)}
+                        >
+                          Remember this
+                        </button>
+                        <button
+                          className="btn ghost"
+                          onClick={() => setFixing(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </section>
 
         <div>

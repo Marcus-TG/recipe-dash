@@ -289,6 +289,49 @@ have" quietly writes a `snapshot(out)` event: a free drift correction
 harvested from cooking. The whole confirmation is skippable; skipping degrades
 confidence, never corrupts.
 
+## Grocery mode
+
+The shopping list is **derived, not stored**: what you need is (the recipes on
+the list) minus (what the pantry says you have), computed on every read. Storing
+the answer would rot the moment a receipt was confirmed — the same reason
+confidence isn't stored. What *is* stored is only what the computation can't
+know: which recipes are on the list, what you added by hand, and which rows are
+already in the cart.
+
+**Several recipes, one list — and the merge is the point.** Needs are keyed by
+item, so two recipes wanting 200 g of butter each become one 400 g line, judged
+against the 300 g in the fridge and marked *short*. Asked per-recipe, both would
+have said "have it" and you'd have got home 100 g down. This is the one place
+the shopping list must NOT reuse the cookable-tonight verdict, which answers a
+per-recipe question.
+
+The unit rule holds: totals only happen inside one family. One recipe in cups
+and another in grams prints `200 g + 1 cup` rather than a number, and — because
+we had figures on both sides and still couldn't line them up — the line stays on
+the list as *check the shelf*. That is deliberately stricter than the
+cookable screen's presence-only fallback: shrugging is safe when you're asking
+"can I cook tonight", and not when the answer sends you to a shop.
+
+Items we can't vouch for are never quietly dropped. Untracked ingredients
+("fresh basil") and stale ones ("parmesan — never confirmed") stay on the list,
+labelled. Only a confident *have enough* moves an item to the collapsed "you
+already have these" group.
+
+**Ticking a row writes nothing to the ledger.** The receipt is what says you
+bought something; a checkbox in a shop is a memory aid, and purchase events
+written here would double-count against the receipt that follows. "Done
+shopping" archives the list and opens an empty one — one open list at a time.
+
+**Legibility is the feature.** The complaint it answers is scrolling up and back
+down hunting for an item, so: one line per row (the pantry verdict is the colour
+of the row's left edge, which costs no height), grouped by aisle in the order you
+walk a shop rather than the order you added things, ticked rows sinking to the
+bottom of their group so the top is always what's left, and a running count in a
+sticky header. Detail — why it's listed, which recipes want it — is a toggle, not
+a default. On desktop the aisles flow into columns and the whole shop is one
+screen. Recipe ingredient lists got the same treatment for the same reason: a
+twelve-ingredient recipe was twelve cards with a button each.
+
 ---
 
 ## Build order
@@ -307,6 +350,7 @@ loop needs calendar time (real shopping trips) to prove itself.
 | M4 | Cookable-tonight screen | **Done-criterion 3** |
 | M5 | Cook mode + consume flow | **Done-criterion 4** |
 | M6 | Mobile polish: keep-screen-on in cook mode, one-handed audit of every screen on a real phone | **Done-criterion 5** |
+| M7 | Grocery mode: multi-recipe shopping list netted against the pantry, aisle-grouped and readable without scrolling | Shopping for several meals at once |
 
 From M2b onward, every real grocery trip is a free integration test that also
 trains the alias table.
@@ -315,11 +359,10 @@ trains the alias table.
 
 Per your brief: no nutrition, no price history, no native apps, no multi-user,
 no barcode scanning, no notifications of any kind (spoilage stays a sort
-order). Additionally parked for v2: shopping list generated from "one thing
-short" gaps (the natural next feature — the data model already supports it),
-outbound webhooks for n8n (v1 is pull-only API), Litestream off-box backups
-(v1 backup = copy the volume), Mealie/Tandoor import, meal planning,
-leftovers tracking.
+order). The shopping list that was parked here has since been built — see
+**Grocery mode** above. Still parked for v2: outbound webhooks for n8n (v1 is
+pull-only API), Litestream off-box backups (v1 backup = copy the volume),
+Mealie/Tandoor import, meal planning, leftovers tracking.
 
 ## Calls you might not realize are calls
 
@@ -338,3 +381,8 @@ leftovers tracking.
    the receipt; use it.
 7. **Presence-based matching with quantity as a tiebreaker** — the design
    answer to "silent unit bugs poison everything."
+8. **The shopping list totals across recipes before asking the pantry** — the
+   only correct order, and the opposite of what reusing the per-recipe verdict
+   would have done.
+9. **Ticking a shopping row is not a purchase** — the ledger's only word on
+   what you bought is the receipt.

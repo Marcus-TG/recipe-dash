@@ -117,3 +117,40 @@ export type CookLine = {
   unitFamily: string | null
   action: string | null
 }
+
+export type GroceryLine = {
+  key: string
+  label: string
+  itemId: number | null
+  category: string
+  source: 'recipe' | 'manual'
+  reason: 'missing' | 'short' | 'uncertain' | 'untracked' | 'manual'
+  needLabel: string | null
+  asks: string[]
+  haveLabel: string | null
+  forRecipes: string[]
+  optional: boolean
+  checked: boolean
+}
+
+export type GroceryAisle = {
+  category: string
+  label: string
+  lines: GroceryLine[]
+}
+
+export type GroceryList = {
+  listId: number
+  name: string
+  recipes: {
+    recipeId: number
+    title: string
+    thumbnail: string | null
+    servings: number | null
+    recipeServings: number | null
+    status: string
+  }[]
+  aisles: GroceryAisle[]
+  covered: { label: string; detail: string | null }[]
+  counts: { total: number; checked: number; remaining: number }
+}

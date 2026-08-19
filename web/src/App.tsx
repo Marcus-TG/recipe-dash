@@ -7,6 +7,7 @@ const TABS = [
   { to: '/pantry', glyph: '🧺', label: 'Pantry' },
   { to: '/inbox', glyph: '🧾', label: 'Inbox' },
   { to: '/recipes', glyph: '📖', label: 'Recipes' },
+  { to: '/shopping', glyph: '🛒', label: 'Shopping' },
 ]
 
 export function App() {
