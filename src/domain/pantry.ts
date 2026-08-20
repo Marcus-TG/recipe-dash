@@ -135,7 +135,11 @@ export function buildItemView(
     id: item.id,
     name: item.name,
     category: item.category,
-    unitFamily: item.unitFamily,
+    // The family the ESTIMATE is in, which is not always the one the item was
+    // declared with: weigh a "count" item once and the ledger starts tracking
+    // it in grams. Both callers compare this against quantityBase, so
+    // reporting the declared family would compare grams against a headcount.
+    unitFamily: state?.unitFamily ?? item.unitFamily,
     level,
     levelLabel: label,
     quantityBase: state?.quantityBaseEstimate ?? null,

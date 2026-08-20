@@ -116,7 +116,16 @@ export function toBase(
   return { quantityBase: quantity * def.toBase, family: def.family }
 }
 
-/** Human-friendly rendering of a base quantity. */
+/**
+ * Human-friendly rendering of a base quantity.
+ *
+ * Grams and millilitres are shown whole. A kitchen scale reads whole grams and
+ * a jug reads whole millilitres, so "453.59 g" — which is only ever the
+ * arithmetic from a 1 lb pack — claims a precision no one in the kitchen can
+ * confirm or act on. Round it to what you could actually read off a device.
+ * Kilograms and litres keep two decimals, because there 1.25 is the readable
+ * number and 1250 g is the awkward one.
+ */
 export function formatBase(
   quantityBase: number | null | undefined,
   family: UnitFamily | string | null | undefined,
@@ -124,12 +133,23 @@ export function formatBase(
   if (quantityBase == null) return '—'
   const q = quantityBase
   if (family === 'mass') {
-    return q >= 1000 ? `${round(q / 1000)} kg` : `${round(q)} g`
+    return q >= 1000 ? `${round(q / 1000)} kg` : `${whole(q)} g`
   }
   if (family === 'volume') {
-    return q >= 1000 ? `${round(q / 1000)} L` : `${round(q)} ml`
+    return q >= 1000 ? `${round(q / 1000)} L` : `${whole(q)} ml`
   }
   return `${round(q)}`
+}
+
+/**
+ * Whole units, except that a real amount must never print as "0" — a scrape
+ * of something left reads as "out" if we round it away, and "out" is a claim
+ * the ledger hasn't made.
+ */
+function whole(n: number): string {
+  const r = Math.round(n)
+  if (r === 0 && n > 0) return '<1'
+  return String(r)
 }
 
 function round(n: number) {

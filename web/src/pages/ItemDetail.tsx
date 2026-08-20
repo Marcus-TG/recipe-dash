@@ -17,6 +17,32 @@ const EVENT_WORDS: Record<string, string> = {
   snapshot: 'you said',
 }
 
+/**
+ * The units you can actually read off a device in this kitchen, grouped by the
+ * device. Anything finer than these is a number nobody can confirm.
+ */
+const UNIT_GROUPS: { device: string; family: string; units: string[] }[] = [
+  { device: 'scale', family: 'mass', units: ['g', 'kg'] },
+  { device: 'jug', family: 'volume', units: ['ml', 'L'] },
+  { device: 'spoons & cups', family: 'volume', units: ['tsp', 'tbsp', 'cup'] },
+  { device: 'counted', family: 'count', units: ['each'] },
+]
+
+const FAMILY_OF: Record<string, string> = {
+  g: 'mass',
+  kg: 'mass',
+  ml: 'volume',
+  L: 'volume',
+  tsp: 'volume',
+  tbsp: 'volume',
+  cup: 'volume',
+  each: 'count',
+}
+
+// Whole numbers off the scale and the jug; the spoons and cups are the only
+// place a half is a real reading.
+const WHOLE_ONLY = new Set(['g', 'ml'])
+
 function when(iso: string) {
   const d = new Date(iso)
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -31,9 +57,32 @@ export function ItemDetail() {
   const [renaming, setRenaming] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [renameError, setRenameError] = useState<string | null>(null)
+  const [amount, setAmount] = useState('')
+  const [unit, setUnit] = useState<string | null>(null)
+  const [weighError, setWeighError] = useState<string | null>(null)
 
   const say = async (level: 'plenty' | 'some' | 'low' | 'out') => {
     await post(`/items/${id}/events`, { type: 'snapshot', level })
+    reload()
+  }
+
+  // A measured snapshot is still a snapshot: absolute, and a human
+  // confirmation, so it resets the staleness clock like the fuzzy buttons do.
+  const weigh = async (chosen: string) => {
+    const quantity = Number(amount)
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      setWeighError('That is not a number I can use.')
+      return
+    }
+    setWeighError(null)
+    await post(`/items/${id}/events`, {
+      type: 'snapshot',
+      quantity,
+      unit: chosen,
+      ...(quantity === 0 ? { level: 'out' } : {}),
+    })
+    setAmount('')
+    setUnit(null)
     reload()
   }
 
@@ -144,6 +193,55 @@ export function ItemDetail() {
           <button className="on bad" onClick={() => void say('out')}>
             Out
           </button>
+        </div>
+
+        {/* Or, if you've got it on the scale: an actual number. Same event
+            type, same reset of the clock — just a reading instead of a word. */}
+        <div className="weigh">
+          <div className="section-label" style={{ marginTop: '1rem' }}>
+            Or measure it
+          </div>
+          {weighError && <div className="error">{weighError}</div>}
+          <input
+            className="weigh-amount"
+            type="number"
+            inputMode={
+              unit && WHOLE_ONLY.has(unit) ? 'numeric' : 'decimal'
+            }
+            step={unit && WHOLE_ONLY.has(unit) ? 1 : 'any'}
+            min={0}
+            value={amount}
+            placeholder="how much is on the scale?"
+            onChange={(e) => setAmount(e.target.value)}
+          />
+          {UNIT_GROUPS.map((group) => (
+            <div className="weigh-group" key={group.device}>
+              <span className="weigh-device">{group.device}</span>
+              {group.units.map((u) => (
+                <button
+                  key={u}
+                  className={`chip weigh-unit${unit === u ? ' on' : ''}`}
+                  disabled={!amount.trim()}
+                  onClick={() => {
+                    setUnit(u)
+                    void weigh(u)
+                  }}
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
+          ))}
+          {/* Only worth saying when it's about to happen. */}
+          {unit &&
+            FAMILY_OF[unit] !== view.unitFamily &&
+            view.quantityBase != null && (
+              <p className="sub note">
+                This is tracked by {view.unitFamily}; saving in {unit} switches
+                it to {FAMILY_OF[unit]}, and recipes that ask in the other one
+                fall back to “have it” unless you give this item a density.
+              </p>
+            )}
         </div>
       </div>
 

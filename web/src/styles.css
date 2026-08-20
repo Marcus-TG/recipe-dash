@@ -1223,3 +1223,47 @@ label {
     color: var(--accent);
   }
 }
+
+/* ---------- measured snapshot -------------------------------------------
+   The fuzzy buttons stay the fast path; this is for when the thing is
+   actually on the scale. Picking the unit IS the save — one tap, not two. */
+
+.weigh-amount {
+  margin-bottom: 0.6rem;
+}
+
+.weigh-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.weigh-device {
+  color: var(--muted);
+  font-size: 0.75rem;
+  min-width: 5.5rem;
+}
+
+.chip.weigh-unit {
+  min-height: 44px;
+  min-width: 56px;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.chip.weigh-unit.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #17150f;
+}
+
+.chip.weigh-unit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

@@ -89,6 +89,28 @@ moment it's written). The UI speaks in words — *plenty / some / low / probably
 out / 🕐 stale info (last confirmed 6 weeks ago)* — with the precise ledger one
 tap away.
 
+Words are the default, not the ceiling. With a scale in the kitchen "about half
+a bag" can be *820 g*, so an item's snapshot takes a reading as readily as a
+word: type the number, tap the unit, and that one tap is the save. The units
+offered are grouped by the device you'd read them off — scale, jug, spoons and
+cups, counted — because a unit you can't measure is a unit you'll guess at. It
+is the same `snapshot` event either way, absolute and human-confirmed, so a
+weighed answer resets the confidence clock exactly like a tapped one.
+
+Displayed grams and millilitres are therefore **whole**. A scale reads whole
+grams, so `453.59 g` — which is only ever the arithmetic from a 1 lb pack —
+claims a precision nobody can confirm or act on; it now reads `454 g`. The one
+exception is that a real amount never prints as `0`: a scrape of something left
+shows `<1 g`, because "0" reads as *out* and out is a claim the ledger hasn't
+made.
+
+One consequence worth naming: an item's estimate can end up in a different unit
+family from the one the item was declared with — weigh a "count" item once and
+the ledger starts tracking it in grams. The read model reports the family the
+*estimate* is in, not the declared one, because every caller compares it against
+that estimate. Reporting the declaration would compare grams against a
+headcount.
+
 ### The learning layer (hard problem #1)
 
 `aliases`: `(store, normalized raw text) → item + default quantity/unit`.
