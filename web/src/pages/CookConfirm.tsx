@@ -63,31 +63,38 @@ export function CookConfirm() {
         </div>
       </div>
 
-      {data.lines.map((line) => (
-        <div className="card" key={line.id}>
-          <div className="row-between">
-            <span className="grow">{line.label}</span>
-            {!line.itemId && <span className="chip untracked">not tracked</span>}
-          </div>
-          {line.itemId && (
-            <div className="seg" style={{ marginTop: '0.6rem' }}>
-              {OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  className={
-                    actions[line.id] === opt.value
-                      ? `on ${opt.tone ?? ''}`.trim()
-                      : ''
-                  }
-                  onClick={() =>
-                    setActions((a) => ({ ...a, [line.id]: opt.value }))
-                  }
-                >
-                  {opt.label}
-                </button>
-              ))}
+      {data.lines.map((line, n) => (
+        <div key={line.id}>
+          {line.section != null && line.section !== data.lines[n - 1]?.section && (
+            <div className="ing-section" style={{ margin: '0.9rem 0 0.4rem' }}>
+              {line.section}
             </div>
           )}
+          <div className="card">
+            <div className="row-between">
+              <span className="grow">{line.label}</span>
+              {!line.itemId && <span className="chip untracked">not tracked</span>}
+            </div>
+            {line.itemId && (
+              <div className="seg" style={{ marginTop: '0.6rem' }}>
+                {OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    className={
+                      actions[line.id] === opt.value
+                        ? `on ${opt.tone ?? ''}`.trim()
+                        : ''
+                    }
+                    onClick={() =>
+                      setActions((a) => ({ ...a, [line.id]: opt.value }))
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       ))}
 

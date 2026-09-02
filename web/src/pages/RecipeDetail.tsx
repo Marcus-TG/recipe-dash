@@ -180,11 +180,14 @@ export function RecipeDetail() {
               pantry item is this?" editor opens on tap, for the rare line that
               needs it. */}
           <div className="card" style={{ padding: '0.25rem 0.35rem' }}>
-            {ingredients.map((ing) => {
+            {ingredients.map((ing, n) => {
               const check = checkByIngredient.get(ing.id)
               const open = fixing === ing.id
+              const startsSection =
+                ing.section != null && ing.section !== ingredients[n - 1]?.section
               return (
                 <div className="ing-row" key={ing.id}>
+                  {startsSection && <div className="ing-section">{ing.section}</div>}
                   <button
                     className="ing-tap"
                     onClick={() => {

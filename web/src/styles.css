@@ -1147,6 +1147,23 @@ label {
   min-width: 0;
 }
 
+/* "For the pico de gallo" — a sub-recipe heading inside the list. Same
+   small-caps voice as .section-label so it reads as structure, not as an
+   ingredient you're missing. Spans both grid columns of the row it opens. */
+.ing-section {
+  grid-column: 1 / -1;
+  padding: 0.7rem 0 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ing-row:first-child > .ing-section {
+  padding-top: 0.35rem;
+}
+
 .ing-dot {
   flex: 0 0 8px;
   height: 8px;

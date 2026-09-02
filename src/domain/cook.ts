@@ -131,10 +131,24 @@ export function cookSessionDetail(sessionId: number) {
     .from(recipes)
     .where(eq(recipes.id, session.recipeId))
     .get()
+  const sectionByIngredient = new Map(
+    db
+      .select({ id: recipeIngredients.id, section: recipeIngredients.section })
+      .from(recipeIngredients)
+      .where(eq(recipeIngredients.recipeId, session.recipeId))
+      .all()
+      .map((i) => [i.id, i.section]),
+  )
   const lines = db
     .select()
     .from(cookSessionLines)
     .where(eq(cookSessionLines.sessionId, sessionId))
     .all()
+    .map((l) => ({
+      ...l,
+      section: l.recipeIngredientId
+        ? (sectionByIngredient.get(l.recipeIngredientId) ?? null)
+        : null,
+    }))
   return { session, recipe, lines }
 }

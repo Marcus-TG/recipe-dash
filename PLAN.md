@@ -141,7 +141,10 @@ mis-rank a recipe, never silently poison the ledger.
 items), `stores`, `receipts` + `receipt_lines` (status flow: `pending_parse` →
 `needs_review` → `confirmed`), `recipes` + `recipe_ingredients` (an
 **unresolved** ingredient is a legal permanent state — "not tracked: fresh
-basil" — and never blocks anything), `cook_sessions` + lines, `llm_jobs`
+basil" — and never blocks anything; a multi-part recipe like "polenta bowls"
+stays ONE recipe, with "For the pico:" headings folded into a `section` label
+on the lines beneath rather than stored as rows — one meal, one cook, one
+shopping trip), `cook_sessions` + lines, `llm_jobs`
 (queue with retry/backoff), `settings` (Paperless cursor, tag id).
 
 ---

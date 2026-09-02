@@ -145,6 +145,77 @@ export type ParsedIngredient = {
 const OPTIONAL_HINT = /\b(optional|to taste|for serving|garnish|if desired)\b/i
 
 /**
+ * Recipe sites that build one meal out of sub-recipes ("For the pico de
+ * gallo:", "Sauce") put the headings inside the ingredient list itself. A
+ * heading is a line with no amount that either ends in a colon or announces
+ * what follows with "for the ...". Treating one as an ingredient would give it
+ * a pantry verdict, a shopping-list line and a cook-confirm row it doesn't
+ * deserve.
+ */
+export function ingredientHeading(raw: string): string | null {
+  const line = raw.replace(/\s+/g, ' ').trim()
+  if (!line) return null
+  const endsWithColon = /:$/.test(line)
+  const forThe = /^for (the |a |an )?[^,]+:?$/i.test(line)
+  if (!endsWithColon && !forThe) return null
+  // A leading amount means it's an ingredient after all ("1 cup rice:" is a
+  // typo, not a heading).
+  if (/^[\d½⅓⅔¼¾⅕⅙⅛⅜⅝⅞]/.test(line)) return null
+  let label = line
+    .replace(/:$/, '')
+    .replace(/^for (the |a |an )?/i, '')
+    .replace(/^to (make |assemble |serve |finish )?(the )?/i, '')
+    .trim()
+  if (!label) return null
+  if (
+    /^(rest|remainder|everything else|assembl[ey]|assembling|serving|serve|finish|the bowls?)$/i.test(
+      label,
+    )
+  ) {
+    return 'Everything else'
+  }
+  // Shouty sites ("FOR THE DRESSING") get the same voice as everyone else.
+  if (label === label.toUpperCase()) label = label.toLowerCase()
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+export type SectionedLine = { rawText: string; section: string | null }
+
+/**
+ * Walk an ingredient list, folding headings into a `section` on the lines
+ * that follow them. Lines before the first heading keep no section.
+ */
+export function splitIngredientSections(lines: string[]): SectionedLine[] {
+  const out: SectionedLine[] = []
+  let section: string | null = null
+  for (const raw of lines) {
+    const heading = ingredientHeading(raw)
+    if (heading) {
+      section = heading
+      continue
+    }
+    if (raw.trim()) out.push({ rawText: raw, section })
+  }
+  return out
+}
+
+/**
+ * "Serves 4!" and "Enjoy!" show up as the last instruction on chatty blogs.
+ * They're not a step, so they don't belong on a cook-mode screen of their own.
+ */
+export function dropTrailingNonSteps(steps: string[]): string[] {
+  const out = [...steps]
+  while (out.length > 1) {
+    const last = out[out.length - 1]!.trim()
+    const isYield = /^(serves|makes|yields?|yield)\b[^.]{0,30}[.!]*$/i.test(last)
+    const isSignoff = /^(enjoy|bon app[ée]tit)[!. ]*$/i.test(last)
+    if (!isYield && !isSignoff) break
+    out.pop()
+  }
+  return out
+}
+
+/**
  * Deterministic ingredient-line parse: "2 cups diced tomatoes" →
  * {2, cup, "diced tomatoes"}. Falls back to name-only, which is fine —
  * presence matching doesn't need a quantity.

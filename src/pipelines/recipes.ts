@@ -1,12 +1,18 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { eq } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { config } from '../config.js'
 import { db } from '../db/client.js'
 import { items, recipeIngredients, recipes } from '../db/schema.js'
 import { resolveIngredientName, upsertAlias } from '../domain/resolve.js'
-import { normalizeItemName, parseIngredientLine } from '../domain/text.js'
+import {
+  dropTrailingNonSteps,
+  ingredientHeading,
+  normalizeItemName,
+  parseIngredientLine,
+  splitIngredientSections,
+} from '../domain/text.js'
 import { enqueue, PermanentJobError, registerHandler } from '../services/jobs.js'
 import { structured } from '../services/ollama.js'
 
@@ -81,10 +87,14 @@ registerHandler('resolve_ingredients', async (payload: { recipeId: number }) => 
   })
 })
 
-/** Ingredient lines resolve through the ladder; unresolved is legal. */
+/**
+ * Ingredient lines resolve through the ladder; unresolved is legal. Section
+ * headings ("For the beans:") become a label on the lines under them rather
+ * than rows — see ingredientHeading.
+ */
 export function saveIngredients(recipeId: number, lines: string[]) {
   db.delete(recipeIngredients).where(eq(recipeIngredients.recipeId, recipeId)).run()
-  lines.forEach((raw, position) => {
+  splitIngredientSections(lines).forEach(({ rawText: raw, section }, position) => {
     const parsed = parseIngredientLine(raw)
     const itemId = resolveIngredientName(parsed.name)
     db.insert(recipeIngredients)
@@ -92,6 +102,7 @@ export function saveIngredients(recipeId: number, lines: string[]) {
         recipeId,
         position,
         rawText: raw,
+        section,
         itemId,
         quantity: parsed.quantity,
         unit: parsed.unit,
@@ -117,7 +128,7 @@ function applyExtraction(recipeId: number, r: ExtractedRecipe, rawSource: string
     .set({
       title: r.title || 'Untitled recipe',
       servings: r.servings,
-      instructions: r.instructions,
+      instructions: dropTrailingNonSteps(r.instructions),
       imageUrl: r.imageUrl ?? null,
       rawSource: rawSource.slice(0, 50_000),
       status: 'needs_review',
@@ -515,6 +526,22 @@ function shortIntro(reply: string): string {
 }
 
 /**
+ * Put the "For the pico:" headings back so the model sees the recipe the way
+ * the site wrote it — and so a revision it returns carries them, which
+ * saveIngredients folds into sections again.
+ */
+function withSectionHeadings(ings: { rawText: string; section: string | null }[]) {
+  const out: string[] = []
+  let current: string | null = null
+  for (const i of ings) {
+    if (i.section && i.section !== current) out.push(`For the ${i.section.toLowerCase()}:`)
+    current = i.section
+    out.push(i.rawText)
+  }
+  return out
+}
+
+/**
  * Ask about substitutions, scaling, technique — and optionally get back a
  * complete revised recipe to apply. The pantry goes into the prompt, so
  * "what can I swap this for?" has a useful answer.
@@ -536,7 +563,7 @@ export async function chatAboutRecipe(
   const recipeContext =
     `RECIPE: ${recipe.title}\n` +
     `Serves: ${recipe.servings ?? 'unstated'}\n\n` +
-    `Ingredients:\n${ings.map((i) => `- ${i.rawText}`).join('\n')}\n\n` +
+    `Ingredients:\n${withSectionHeadings(ings).map((l) => `- ${l}`).join('\n')}\n\n` +
     `Method:\n${recipe.instructions.map((s, n) => `${n + 1}. ${s}`).join('\n')}\n\n`
 
   const intent = await structured({
@@ -665,3 +692,41 @@ registerHandler('parse_recipe_photo', async (payload: { recipeId: number; file: 
     JSON.stringify(parsed),
   )
 })
+
+/**
+ * Recipes imported before headings were understood have "For the beans:" rows
+ * sitting in their ingredient lists. Re-save those from their raw lines so
+ * the headings fold into sections. Runs once per boot, touches only recipes
+ * that actually have a heading row. Human item fixes survive because they
+ * live in the alias table, which the ladder consults on re-save.
+ */
+export function backfillIngredientSections() {
+  const rows = db
+    .select({
+      recipeId: recipeIngredients.recipeId,
+      rawText: recipeIngredients.rawText,
+    })
+    .from(recipeIngredients)
+    .orderBy(asc(recipeIngredients.recipeId), asc(recipeIngredients.position))
+    .all()
+  const byRecipe = new Map<number, string[]>()
+  for (const r of rows) {
+    const list = byRecipe.get(r.recipeId) ?? []
+    list.push(r.rawText)
+    byRecipe.set(r.recipeId, list)
+  }
+  let fixed = 0
+  for (const [recipeId, lines] of byRecipe) {
+    if (!lines.some((l) => ingredientHeading(l))) continue
+    saveIngredients(recipeId, lines)
+    const recipe = db.select().from(recipes).where(eq(recipes.id, recipeId)).get()
+    if (recipe) {
+      const steps = dropTrailingNonSteps(recipe.instructions)
+      if (steps.length !== recipe.instructions.length) {
+        db.update(recipes).set({ instructions: steps }).where(eq(recipes.id, recipeId)).run()
+      }
+    }
+    fixed++
+  }
+  return fixed
+}

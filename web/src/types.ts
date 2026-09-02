@@ -101,6 +101,7 @@ export type RecipeIngredient = {
   id: number
   position: number
   rawText: string
+  section: string | null
   itemId: number | null
   itemName: string | null
   quantity: number | null
@@ -112,6 +113,7 @@ export type RecipeIngredient = {
 export type CookLine = {
   id: number
   label: string
+  section: string | null
   itemId: number | null
   proposedQuantityBase: number | null
   unitFamily: string | null

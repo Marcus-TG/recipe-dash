@@ -55,10 +55,15 @@ export function CookMode() {
         {step < 0 ? (
           <div className="cook-ings grow">
             <h1 style={{ marginBottom: '0.75rem' }}>{data.recipe.title}</h1>
-            {data.ingredients.map((ing) => (
-              <p key={ing.id} style={{ fontSize: '1.15rem', padding: '0.35rem 0' }}>
-                • {ing.rawText}
-              </p>
+            {data.ingredients.map((ing, n) => (
+              <div key={ing.id}>
+                {ing.section != null && ing.section !== data.ingredients[n - 1]?.section && (
+                  <div className="ing-section" style={{ marginTop: n > 0 ? '0.9rem' : 0 }}>
+                    {ing.section}
+                  </div>
+                )}
+                <p style={{ fontSize: '1.15rem', padding: '0.35rem 0' }}>• {ing.rawText}</p>
+              </div>
             ))}
           </div>
         ) : (

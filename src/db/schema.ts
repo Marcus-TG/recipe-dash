@@ -194,6 +194,9 @@ export const recipeIngredients = sqliteTable(
       .references(() => recipes.id, { onDelete: 'cascade' }),
     position: integer('position').notNull(),
     rawText: text('raw_text').notNull(),
+    // "For the pico de gallo" — the sub-recipe this line belongs to, when the
+    // source grouped its list. Headings are never stored as rows of their own.
+    section: text('section'),
     // Unresolved is a legal permanent state — the recipe stays cookable.
     itemId: integer('item_id').references(() => items.id),
     quantity: real('quantity'),

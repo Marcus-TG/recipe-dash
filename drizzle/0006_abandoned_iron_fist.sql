@@ -1,0 +1,1 @@
+ALTER TABLE `recipe_ingredients` ADD `section` text;
