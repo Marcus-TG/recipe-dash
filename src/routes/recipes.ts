@@ -12,8 +12,13 @@ import {
   recipes,
 } from '../db/schema.js'
 import { matchRecipes } from '../domain/matching.js'
+import { densityFor, learnDensities } from '../domain/weights.js'
 import { findOrCreateItem, upsertAlias } from '../domain/resolve.js'
-import { normalizeItemName, parseIngredientLine } from '../domain/text.js'
+import {
+  describeIngredient,
+  normalizeItemName,
+  parseIngredientLine,
+} from '../domain/text.js'
 import {
   applyRecipeRevision,
   attachRecipeImageFile,
@@ -23,6 +28,8 @@ import {
   importRecipeFromPhoto,
   importRecipeFromText,
   importRecipeFromUrl,
+  rereadRecipe,
+  RereadError,
 } from '../pipelines/recipes.js'
 import { LlmUnavailableError } from '../services/ollama.js'
 import { enqueue } from '../services/jobs.js'
@@ -83,7 +90,14 @@ export async function recipeRoutes(app: FastifyInstance) {
     method: 'GET',
     url: '/recipes/:id',
     schema: {
-      description: 'A recipe with its ingredients and how each one resolved.',
+      description:
+        'A recipe with its ingredients, notes, and how each ingredient resolved. Each ' +
+        'ingredient carries `display`: the line split into amount, metric, text and ' +
+        'note. The metric figure is the author\'s own, exact arithmetic from pounds ' +
+        'and ounces, or — marked "≈", with `estimate` saying where from — a weight ' +
+        'from measured data: a density set on the pantry item, authors in this ' +
+        'library who weighed the same ingredient, or USDA cup weights. Never a ' +
+        'model\'s guess.',
       tags: ['recipes'],
       params: z.object({ id: z.coerce.number() }),
     },
@@ -98,16 +112,33 @@ export async function recipeRoutes(app: FastifyInstance) {
         .all()
       const itemById = new Map(db.select().from(items).all().map((i) => [i.id, i]))
       const match = matchRecipes().find((m) => m.recipeId === recipe.id) ?? null
+      // Every recipe that weighed an ingredient teaches this one what a cup of
+      // it weighs — see weights.ts.
+      const learned = learnDensities(
+        db
+          .select({
+            rawText: recipeIngredients.rawText,
+            itemId: recipeIngredients.itemId,
+            recipeTitle: recipes.title,
+          })
+          .from(recipeIngredients)
+          .innerJoin(recipes, eq(recipes.id, recipeIngredients.recipeId))
+          .all(),
+      )
       return {
         recipe: {
           ...recipe,
           thumbnail: recipe.imageFile ? `/uploads/${recipe.imageFile}` : null,
         },
         match,
-        ingredients: ings.map((i) => ({
-          ...i,
-          itemName: i.itemId ? (itemById.get(i.itemId)?.name ?? null) : null,
-        })),
+        ingredients: ings.map((i) => {
+          const item = i.itemId ? (itemById.get(i.itemId) ?? null) : null
+          return {
+            ...i,
+            itemName: item?.name ?? null,
+            display: describeIngredient(i.rawText, densityFor(i, item, learned)),
+          }
+        }),
       }
     },
   })
@@ -195,6 +226,10 @@ export async function recipeRoutes(app: FastifyInstance) {
         servings: z.number().nullish(),
         ingredients: z.array(z.string()).min(1),
         instructions: z.array(z.string()),
+        notes: z
+          .array(z.string())
+          .optional()
+          .describe('Leave out to keep the notes the recipe has.'),
       }),
     },
     handler: async (req) => {
@@ -203,8 +238,35 @@ export async function recipeRoutes(app: FastifyInstance) {
         servings: req.body.servings ?? null,
         ingredients: req.body.ingredients,
         instructions: req.body.instructions,
+        notes: req.body.notes,
       })
       return { ok: true }
+    },
+  })
+
+  r.route({
+    method: 'POST',
+    url: '/recipes/:id/reread',
+    schema: {
+      description:
+        'Read a recipe from its source again (link, pasted text or photo), to pick up ' +
+        'what the importer has learned since — notes, the author\'s metric amounts. ' +
+        'Replaces ingredients, method and notes, including chat revisions; pantry ' +
+        'matches you fixed by hand are remembered. A link is fetched immediately and ' +
+        'a refusal leaves the recipe unchanged. `queued` means the model has to read ' +
+        'it, which happens in the background.',
+      tags: ['recipes'],
+      params: z.object({ id: z.coerce.number() }),
+    },
+    handler: async (req, reply) => {
+      try {
+        return { result: await rereadRecipe(req.params.id) }
+      } catch (err) {
+        if (err instanceof RereadError) {
+          return reply.code(502).send({ message: err.message })
+        }
+        throw err
+      }
     },
   })
 

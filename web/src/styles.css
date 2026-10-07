@@ -1198,6 +1198,134 @@ label {
   padding: 0.5rem 0 0.25rem 1rem;
 }
 
+/* ---------- ingredient lines: amount · scale reading · ingredient, aside ---
+   The scale reading sits in the same place on every line, so with a bowl on
+   the scale your eye goes straight to it. The recipe's own figure is solid;
+   an estimate is dashed and quieter — it's a weight from measured data, not
+   what the author wrote. */
+
+.ing-text {
+  padding: 0.5rem 0;
+  line-height: 1.35;
+}
+
+.ing-amount {
+  font-weight: 700;
+  margin-right: 0.35rem;
+}
+
+.ing-metric {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0 0.4rem;
+  border: 1px solid rgba(232, 163, 61, 0.45);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 0.85em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.ing-metric.est {
+  border-style: dashed;
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.ing-note {
+  color: var(--muted);
+}
+
+.note-ref {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.ing-written {
+  margin-bottom: 0.6rem;
+}
+
+/* Re-read and delete, under everything. */
+.detail-foot {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 2.5rem;
+}
+
+@media (min-width: 860px) {
+  .detail-foot {
+    grid-template-columns: repeat(2, minmax(0, 23rem));
+    align-items: start;
+  }
+}
+
+/* ---------- recipe notes: under the method, as on the recipe card -------- */
+
+.notes p {
+  position: relative;
+  margin-bottom: 0.8rem;
+  border-radius: 8px;
+  /* Clear of the top of the screen when "Note 1" scrolls here. */
+  scroll-margin: 6rem;
+}
+
+.notes p:last-child {
+  margin-bottom: 0;
+}
+
+.notes.numbered p {
+  padding-left: 2.1rem;
+}
+
+.notes-num {
+  position: absolute;
+  left: 0;
+  top: 0.05rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.notes-head {
+  font-weight: 700;
+}
+
+.notes p.flash {
+  animation: note-flash 1.6s ease-out;
+}
+
+@keyframes note-flash {
+  from {
+    background: rgba(232, 163, 61, 0.22);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+/* Cook mode's step text is huge; its ingredient page and notes aren't. */
+.cook-step p.cook-ing {
+  font-size: 1.15rem;
+  line-height: 1.45;
+  padding: 0.35rem 0;
+}
+
+.cook-step .notes p {
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
 @media (min-width: 860px) {
   .glist-head {
     padding-top: 0;

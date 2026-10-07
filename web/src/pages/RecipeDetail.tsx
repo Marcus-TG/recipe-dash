@@ -3,12 +3,19 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { del, patch, post, useFetch } from '../api'
 import { RecipeChat } from '../components/RecipeChat'
 import { RecipeImage } from '../components/RecipeImage'
+import { IngredientLine, noteNumbers, RecipeNotes } from '../components/RecipeText'
 import type { IngredientCheck, Recipe, RecipeIngredient, RecipeMatch } from '../types'
 
 type Payload = {
   recipe: Recipe
   match: RecipeMatch | null
   ingredients: RecipeIngredient[]
+}
+
+const SOURCE_WORD: Record<string, string> = {
+  url: 'page',
+  photo: 'photo',
+  text: 'pasted text',
 }
 
 const VERDICT_WORDS: Record<IngredientCheck['verdict'], string> = {
@@ -28,6 +35,9 @@ export function RecipeDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [listed, setListed] = useState(false)
+  const [confirmReread, setConfirmReread] = useState(false)
+  const [rereading, setRereading] = useState(false)
+  const [rereadNote, setRereadNote] = useState<string | null>(null)
 
   // Still being parsed — poll until it lands.
   useEffect(() => {
@@ -48,6 +58,30 @@ export function RecipeDetail() {
   const addToList = async () => {
     await post('/grocery/list/recipes', { recipeId: Number(id) })
     setListed(true)
+  }
+
+  /**
+   * Read the recipe from its source again, to pick up what the importer has
+   * learned since it came in — notes, the author's metric amounts. A link is
+   * fetched while you wait, and a site that refuses leaves the recipe as it was.
+   */
+  const reread = async () => {
+    setConfirmReread(false)
+    setRereading(true)
+    setRereadNote(null)
+    try {
+      const res = await post<{ result: 'done' | 'queued' }>(`/recipes/${id}/reread`)
+      setRereadNote(
+        res.result === 'done'
+          ? 'Read it again — this is the fresh copy.'
+          : 'forte is reading it again. The new version replaces this one when it’s done.',
+      )
+      reload()
+    } catch (err) {
+      setRereadNote((err as Error).message)
+    } finally {
+      setRereading(false)
+    }
   }
 
   const remove = async () => {
@@ -74,6 +108,8 @@ export function RecipeDetail() {
   const checkByIngredient = new Map(
     (match?.checks ?? []).map((c) => [c.ingredientId, c]),
   )
+  const notesByNumber = noteNumbers(recipe.notes)
+  const anyEstimate = ingredients.some((i) => i.display.estimate)
 
   if (recipe.status === 'pending_parse') {
     return (
@@ -196,13 +232,24 @@ export function RecipeDetail() {
                     }}
                   >
                     <span className={`ing-dot ${check?.verdict ?? 'untracked'}`} />
-                    <span className="ing-text">{ing.rawText}</span>
+                    <span className="ing-text">
+                      <IngredientLine display={ing.display} notes={notesByNumber} />
+                    </span>
                   </button>
                   <span className="ing-why">
                     {check ? VERDICT_WORDS[check.verdict] : ''}
                   </span>
                   {open && (
                     <div className="ing-edit">
+                      {/* The line is shown rearranged, so the original is
+                          here for checking against. */}
+                      <p className="sub ing-written">As written: {ing.rawText}</p>
+                      {ing.display.estimate && (
+                        <p className="sub ing-written">
+                          <span className="ing-metric est">{ing.display.metric}</span>{' '}
+                          {ing.display.estimate}
+                        </p>
+                      )}
                       <div className="field">
                         <label>Which pantry item is this?</label>
                         <input
@@ -238,6 +285,12 @@ export function RecipeDetail() {
               )
             })}
           </div>
+          {anyEstimate && (
+            <p className="sub note">
+              <span className="ing-metric est">≈</span> is a weight from measured data,
+              not from this recipe. Tap a line to see where it came from.
+            </p>
+          )}
         </section>
 
         <div>
@@ -256,29 +309,69 @@ export function RecipeDetail() {
             </section>
           )}
 
+          {recipe.notes.length > 0 && (
+            <section className="section">
+              <div className="section-label">Notes</div>
+              <RecipeNotes notes={recipe.notes} />
+            </section>
+          )}
+
           <RecipeChat recipeId={recipe.id} onRevised={reload} />
         </div>
       </div>
 
-      {deleteError && <div className="error">{deleteError}</div>}
-
-      {confirmDelete ? (
-        <div className="btn-row">
-          <button className="btn danger grow" onClick={() => void remove()}>
-            Yes, delete “{recipe.title}”
-          </button>
-          <button className="btn ghost" onClick={() => setConfirmDelete(false)}>
-            Keep it
-          </button>
+      {/* Housekeeping, kept apart from the recipe and from each other. */}
+      <div className="detail-foot">
+        <div>
+          {confirmReread ? (
+            <div className="btn-row">
+              <button className="btn primary grow" onClick={() => void reread()}>
+                Read it again
+              </button>
+              <button className="btn ghost" onClick={() => setConfirmReread(false)}>
+                Keep this version
+              </button>
+            </div>
+          ) : (
+            <button
+              className="btn ghost block"
+              disabled={rereading}
+              onClick={() => setConfirmReread(true)}
+            >
+              {rereading ? 'Reading it again…' : 'Read this recipe again'}
+            </button>
+          )}
+          {confirmReread && (
+            <p className="sub note">
+              Replaces the ingredients, method and notes with a fresh read of the{' '}
+              {SOURCE_WORD[recipe.sourceType] ?? 'source'}, including anything you
+              changed with the chat. Pantry matches you fixed are remembered.
+            </p>
+          )}
+          {rereadNote && <p className="sub note">{rereadNote}</p>}
         </div>
-      ) : (
-        <button
-          className="btn ghost danger block"
-          onClick={() => setConfirmDelete(true)}
-        >
-          Delete recipe
-        </button>
-      )}
+
+        <div>
+          {deleteError && <div className="error">{deleteError}</div>}
+          {confirmDelete ? (
+            <div className="btn-row">
+              <button className="btn danger grow" onClick={() => void remove()}>
+                Yes, delete “{recipe.title}”
+              </button>
+              <button className="btn ghost" onClick={() => setConfirmDelete(false)}>
+                Keep it
+              </button>
+            </div>
+          ) : (
+            <button
+              className="btn ghost danger block"
+              onClick={() => setConfirmDelete(true)}
+            >
+              Delete recipe
+            </button>
+          )}
+        </div>
+      </div>
     </main>
   )
 }

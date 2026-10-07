@@ -32,6 +32,7 @@ const UNITS: Record<string, { family: UnitFamily; toBase: number }> = {
   teaspoon: { family: 'volume', toBase: 4.92892 },
   teaspoons: { family: 'volume', toBase: 4.92892 },
   tbsp: { family: 'volume', toBase: 14.7868 },
+  tbs: { family: 'volume', toBase: 14.7868 }, // "2 Tbs. butter"
   tablespoon: { family: 'volume', toBase: 14.7868 },
   tablespoons: { family: 'volume', toBase: 14.7868 },
   cup: { family: 'volume', toBase: 236.588 },
@@ -102,6 +103,31 @@ export function normalizeUnit(unit: string | null | undefined): string | null {
 export function unitFamily(unit: string | null | undefined): UnitFamily | null {
   const u = normalizeUnit(unit)
   return u ? UNITS[u]!.family : null
+}
+
+// What a kitchen scale or a measuring jug reads directly. Recipes that give
+// both measures put one of these beside the cup or spoon.
+const METRIC_SHORT: Record<string, string> = {
+  g: 'g',
+  gram: 'g',
+  grams: 'g',
+  kg: 'kg',
+  kilogram: 'kg',
+  kilograms: 'kg',
+  ml: 'ml',
+  millilitre: 'ml',
+  milliliter: 'ml',
+  l: 'L',
+  litre: 'L',
+  liter: 'L',
+  liters: 'L',
+  litres: 'L',
+}
+
+/** The short metric spelling ("grams" → "g"), or null for any other unit. */
+export function metricSymbol(unit: string | null | undefined): string | null {
+  const u = normalizeUnit(unit)
+  return u ? (METRIC_SHORT[u] ?? null) : null
 }
 
 /** Convert to the family's base unit (g / ml / each). Null if unknown. */

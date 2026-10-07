@@ -135,6 +135,36 @@ presence-only ("have it") rather than guessing. Conversions happen at
 comparison time and are never written back — so a wrong quantity can at worst
 mis-rank a recipe, never silently poison the ledger.
 
+**Reading a recipe is a different question from matching one**, and it gets a
+looser rule. With a scale in the kitchen, every line should carry the weight
+beside the cup — RecipeTin Eats' "⅓ cup · 50 g flour". In order of trust, that
+weight is:
+
+1. **The author's own** — "1/3 cup (50g)", "40g / 3 tbsp", "1 cup/125 grams",
+   "1½ cups flour (6.75 ounces)" — moved to the same place on every line.
+2. **Exact arithmetic** inside one family — pounds and ounces to grams.
+3. **An estimate from measured data, marked "≈"**, that says where it came
+   from when tapped. Never a model's guess. The sources, closest to home
+   first: a density set on the pantry item; recipe authors in this library
+   who weighed the same ingredient (every "1/3 cup (50 g) flour" is a
+   measurement, learned at read time, the way aliases learn from receipts);
+   USDA's measured cup weights (`src/domain/cup-weights.ts`, generated from
+   the public-domain SR Legacy data by `scripts/build-cup-weights.ts`, every
+   figure tagged with its USDA record). Your library outranks USDA only once
+   two of its recipes agree — one author's rounded "3 tbsp = 40 g" shouldn't
+   overrule a lab — but for something USDA doesn't list, one recipe will do.
+
+No estimate is shown when it would mislead: under a tablespoon or 5 g (the
+spoon is the better tool), when the author already wrote a weight on the line
+in their own words ("5 cups broccoli (~300g)"), for salt (kosher weighs half
+what table salt does, and recipes rarely say which), and for anything none of
+the sources knows — no figure beats a wrong one. A cup is never shown as
+millilitres: "1 cup · 237 ml" beside flour is a number someone will weigh out.
+
+All of this is **display only**. Matching and the shopping list still never
+cross mass and volume without a density a human gave; an estimate that is off
+by 15% is fine to read and not fine to subtract from the ledger.
+
 ### Everything else
 
 `items` (canonical: "chicken breast" — brands and pack sizes are aliases, not
@@ -144,7 +174,9 @@ items), `stores`, `receipts` + `receipt_lines` (status flow: `pending_parse` →
 basil" — and never blocks anything; a multi-part recipe like "polenta bowls"
 stays ONE recipe, with "For the pico:" headings folded into a `section` label
 on the lines beneath rather than stored as rows — one meal, one cook, one
-shopping trip), `cook_sessions` + lines, `llm_jobs`
+shopping trip; a recipe also keeps the card's own `notes` — "Note 1: any
+potato works" — which is not the blog story, still thrown away),
+`cook_sessions` + lines, `llm_jobs`
 (queue with retry/backoff), `settings` (Paperless cursor, tag id).
 
 ---
@@ -258,6 +290,25 @@ schema → same review screen. **Paste:** many sites (simplyrecipes,
 allrecipes, seriouseats) return 403 to anything that isn't a real browser, so
 pasted page text goes through the same extraction — which doubles as the
 debloater, since the prompt discards the story, ads, nutrition and comments.
+
+**What schema.org drops, the recipe card still has.** JSON-LD has nowhere for
+the notes under a recipe, and carries only one measure per line. Both are in
+the page's own markup, so they're read from the plugin that built the card:
+notes from WP Recipe Maker, Tasty Recipes or Mediavine Create; the author's
+second measure and ingredient groups ("Garnish, optional" — whose lines become
+optional) from WP Recipe Maker's data, which is behind RecipeTin Eats and a
+good share of food blogs. Any of it that doesn't line up is skipped and the
+plain JSON-LD stands.
+
+**Read it again.** An imported recipe is frozen at whatever the importer knew
+that day, so each one has a re-read: a link is fetched while you wait (a site
+that refuses leaves the recipe as it was), pasted text and photos go back
+through the model. It replaces ingredients, method and notes — chat revisions
+included, which the button says before it does it — while pantry matches you
+fixed survive in the alias table. Cook history keeps its own label and item
+and only loses its link to the old ingredient row; before this, replacing the
+ingredients of any recipe you'd cooked failed on that foreign key, chat
+revisions included.
 
 **Chat:** each recipe has an ask box for substitutions, scaling, and
 technique, with the pantry in the prompt so "what can I swap?" has a useful
@@ -411,3 +462,6 @@ Mealie/Tandoor import, meal planning, leftovers tracking.
    would have done.
 9. **Ticking a shopping row is not a purchase** — the ledger's only word on
    what you bought is the receipt.
+10. **Estimated weights are for reading, not for the ledger** — measured data
+    or nothing, never a model's guess, always marked "≈" and always able to say
+    where it came from.

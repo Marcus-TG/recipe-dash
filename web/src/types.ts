@@ -91,16 +91,31 @@ export type Recipe = {
   sourceUrl: string | null
   servings: number | null
   instructions: string[]
+  notes: string[]
   status: string
   imageUrl: string | null
   thumbnail: string | null
   awaitingParse?: boolean
 }
 
+/**
+ * An ingredient line split for reading: "⅓ cup" · "50 g" · "flour", "sifted".
+ * `estimate` is set only when `metric` is an "≈" figure, and says where it
+ * came from.
+ */
+export type IngredientDisplay = {
+  amount: string | null
+  metric: string | null
+  estimate: string | null
+  text: string
+  note: string | null
+}
+
 export type RecipeIngredient = {
   id: number
   position: number
   rawText: string
+  display: IngredientDisplay
   section: string | null
   itemId: number | null
   itemName: string | null

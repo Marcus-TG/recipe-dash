@@ -176,6 +176,12 @@ export const recipes = sqliteTable('recipes', {
     .notNull()
     .default(sql`'[]'`)
     .$type<string[]>(),
+  // The recipe card's own notes — substitutions, storage, "Note 1: any potato
+  // works". Not the blog story above the recipe; that's still thrown away.
+  notes: text('notes', { mode: 'json' })
+    .notNull()
+    .default(sql`'[]'`)
+    .$type<string[]>(),
   rawSource: text('raw_source'),
   status: text('status').notNull().default('needs_review'), // needs_review|active|archived|pending_parse|parse_failed
   imageUrl: text('image_url'), // where it came from

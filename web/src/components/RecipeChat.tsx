@@ -8,6 +8,7 @@ type Proposal = {
   servings: number | null
   ingredients: string[]
   instructions: string[]
+  notes: string[]
 }
 
 type ChatResponse = { reply: string; proposal: Proposal | null }

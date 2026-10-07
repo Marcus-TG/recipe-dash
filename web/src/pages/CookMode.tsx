@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { post, useFetch } from '../api'
+import { IngredientLine, noteNumbers, RecipeNotes } from '../components/RecipeText'
 import type { Recipe, RecipeIngredient } from '../types'
 import { useKeepAwake } from '../useKeepAwake'
 
@@ -33,6 +34,7 @@ export function CookMode() {
   if (loading || !data) return <main className="page">Loading…</main>
 
   const steps = data.recipe.instructions
+  const notesByNumber = noteNumbers(data.recipe.notes)
   const atEnd = step >= steps.length - 1
   const total = steps.length
 
@@ -62,9 +64,20 @@ export function CookMode() {
                     {ing.section}
                   </div>
                 )}
-                <p style={{ fontSize: '1.15rem', padding: '0.35rem 0' }}>• {ing.rawText}</p>
+                <p className="cook-ing">
+                  <IngredientLine display={ing.display} notes={notesByNumber} />
+                </p>
               </div>
             ))}
+            {/* Read before starting: "any potato works", "Note 1" for the line above. */}
+            {data.recipe.notes.length > 0 && (
+              <>
+                <div className="ing-section" style={{ marginTop: '1.5rem' }}>
+                  Notes
+                </div>
+                <RecipeNotes notes={data.recipe.notes} />
+              </>
+            )}
           </div>
         ) : (
           <p>{steps[step]}</p>

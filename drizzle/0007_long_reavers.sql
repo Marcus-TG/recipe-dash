@@ -1,0 +1,1 @@
+ALTER TABLE `recipes` ADD `notes` text DEFAULT '[]' NOT NULL;
