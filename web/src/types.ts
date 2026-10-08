@@ -92,6 +92,7 @@ export type Recipe = {
   servings: number | null
   instructions: string[]
   notes: string[]
+  myNotes: string | null
   status: string
   imageUrl: string | null
   thumbnail: string | null
@@ -110,6 +111,9 @@ export type IngredientDisplay = {
   text: string
   note: string | null
 }
+
+/** A piece of a method step; `ingredientId` marks where that ingredient goes in. */
+export type StepSegment = { text: string; ingredientId?: number }
 
 export type RecipeIngredient = {
   id: number

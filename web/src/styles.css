@@ -1211,12 +1211,12 @@ label {
 
 .ing-amount {
   font-weight: 700;
-  margin-right: 0.35rem;
+  margin-right: 0.1rem;
 }
 
 .ing-metric {
   display: inline-block;
-  margin-right: 0.35rem;
+  margin-right: 0.1rem;
   padding: 0 0.4rem;
   border: 1px solid rgba(232, 163, 61, 0.45);
   border-radius: 6px;
@@ -1249,7 +1249,7 @@ label {
   margin-bottom: 0.6rem;
 }
 
-/* Re-read and delete, under everything. */
+/* Edit, re-read and delete, under everything. */
 .detail-foot {
   display: grid;
   gap: 0.75rem;
@@ -1258,9 +1258,128 @@ label {
 
 @media (min-width: 860px) {
   .detail-foot {
-    grid-template-columns: repeat(2, minmax(0, 23rem));
+    grid-template-columns: repeat(3, minmax(0, 20rem));
     align-items: start;
   }
+}
+
+/* ---------- edit mode: the recipe as plain text boxes ------------------- */
+
+.editor h1 {
+  margin-bottom: 1rem;
+}
+
+/* .back is a link everywhere else; here it's a button that leaves edit mode. */
+button.back {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.editor textarea {
+  resize: none;
+  overflow: hidden;
+}
+
+.editor-head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.editor-serves {
+  flex: none;
+  width: 6.5rem;
+}
+
+.editor .detail-cols .section:first-child {
+  margin-top: 0;
+}
+
+.editor .sub {
+  font-size: 0.85rem;
+}
+
+code {
+  padding: 0 0.3rem;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.88em;
+}
+
+/* Save stays in reach at the bottom of the screen, above the tab bar. */
+.editor-actions {
+  position: sticky;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  margin-top: 1.5rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+
+@media (min-width: 860px) {
+  /* Full width, so the right-hand column scrolls under a solid bar rather
+     than under two loose buttons. */
+  .editor-actions {
+    bottom: 0;
+  }
+
+  .editor-actions .btn.grow {
+    flex: 0 1 20rem;
+  }
+}
+
+/* ---------- my notes: yours, kept when the recipe is read again --------- */
+
+.my-notes {
+  cursor: pointer;
+}
+
+.my-notes p,
+.my-notes-text {
+  white-space: pre-wrap;
+  margin-bottom: 0.35rem;
+}
+
+.empty-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-style: dashed;
+  color: var(--accent);
+}
+
+.my-notes-input {
+  margin-bottom: 0.6rem;
+}
+
+/* ---------- amounts in the method: "Melt butter [3 tbsp · 40 g]" --------
+   Set apart from the author's words — a quiet tag, not part of the
+   sentence — with the scale reading in the same accent as the ingredient
+   list, and an estimate as muted there as it is there. */
+
+.step-amt {
+  display: inline-block;
+  padding: 0 0.4rem;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.8em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.step-amt .scale {
+  color: var(--accent);
+}
+
+.step-amt .est {
+  color: var(--muted);
 }
 
 /* ---------- recipe notes: under the method, as on the recipe card -------- */

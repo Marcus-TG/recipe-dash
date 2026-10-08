@@ -12,7 +12,8 @@ import {
   recipes,
 } from '../db/schema.js'
 import { matchRecipes } from '../domain/matching.js'
-import { densityFor, learnDensities } from '../domain/weights.js'
+import { linkSteps } from '../domain/steps.js'
+import { cupMlFor, densityFor, learnDensities } from '../domain/weights.js'
 import { findOrCreateItem, upsertAlias } from '../domain/resolve.js'
 import {
   describeIngredient,
@@ -95,9 +96,13 @@ export async function recipeRoutes(app: FastifyInstance) {
         'ingredient carries `display`: the line split into amount, metric, text and ' +
         'note. The metric figure is the author\'s own, exact arithmetic from pounds ' +
         'and ounces, or — marked "≈", with `estimate` saying where from — a weight ' +
-        'from measured data: a density set on the pantry item, authors in this ' +
-        'library who weighed the same ingredient, or USDA cup weights. Never a ' +
-        'model\'s guess.',
+        'from measured data: a density set on the pantry item, the same site\'s own ' +
+        'weights for that ingredient, or USDA cup weights (other sites\' weights only ' +
+        'when USDA has none). Never a model\'s guess. Cups count at the size the ' +
+        'recipe uses — 250 ml for Australian sites, 236.6 ml for US. `steps` is the ' +
+        'method split at the first place each ingredient is used, so its amount can ' +
+        'be shown there; matched by the words, and left out where it could be ' +
+        'either of two ingredients or the step already says how much.',
       tags: ['recipes'],
       params: z.object({ id: z.coerce.number() }),
     },
@@ -114,31 +119,48 @@ export async function recipeRoutes(app: FastifyInstance) {
       const match = matchRecipes().find((m) => m.recipeId === recipe.id) ?? null
       // Every recipe that weighed an ingredient teaches this one what a cup of
       // it weighs — see weights.ts.
-      const learned = learnDensities(
+      const library = learnDensities(
         db
           .select({
+            recipeId: recipeIngredients.recipeId,
             rawText: recipeIngredients.rawText,
             itemId: recipeIngredients.itemId,
             recipeTitle: recipes.title,
+            sourceUrl: recipes.sourceUrl,
           })
           .from(recipeIngredients)
           .innerJoin(recipes, eq(recipes.id, recipeIngredients.recipeId))
           .all(),
       )
+      // "1 cup" in a RecipeTin Eats recipe is 250 ml, not 237.
+      const cupMl = cupMlFor(recipe.id, recipe.sourceUrl, library)
+      const ingredients = ings.map((i) => {
+        const item = i.itemId ? (itemById.get(i.itemId) ?? null) : null
+        return {
+          ...i,
+          itemName: item?.name ?? null,
+          display: describeIngredient(
+            i.rawText,
+            densityFor(i, item, library, recipe.sourceUrl),
+            cupMl,
+          ),
+        }
+      })
       return {
         recipe: {
           ...recipe,
           thumbnail: recipe.imageFile ? `/uploads/${recipe.imageFile}` : null,
         },
         match,
-        ingredients: ings.map((i) => {
-          const item = i.itemId ? (itemById.get(i.itemId) ?? null) : null
-          return {
-            ...i,
-            itemName: item?.name ?? null,
-            display: describeIngredient(i.rawText, densityFor(i, item, learned)),
-          }
-        }),
+        ingredients,
+        steps: linkSteps(
+          recipe.instructions,
+          ingredients.map((i) => ({
+            id: i.id,
+            rawText: i.rawText,
+            hasAmount: i.display.amount != null,
+          })),
+        ),
       }
     },
   })
@@ -217,8 +239,11 @@ export async function recipeRoutes(app: FastifyInstance) {
     url: '/recipes/:id/revise',
     schema: {
       description:
-        'Apply a revision (usually one the chat proposed). Ingredients are re-matched ' +
-        'to the pantry afterwards.',
+        'Replace a recipe\'s content — from the edit screen, or a revision the chat ' +
+        'proposed. Ingredient lines are written as they read ("1/3 cup (50 g) flour"); ' +
+        'a line ending in a colon ("For the frosting:") starts a group. Ingredients ' +
+        'are re-matched to the pantry afterwards, and pantry matches fixed by hand ' +
+        'are remembered. Your own notes (`myNotes`) are never touched.',
       tags: ['recipes'],
       params: z.object({ id: z.coerce.number() }),
       body: z.object({
@@ -369,13 +394,17 @@ export async function recipeRoutes(app: FastifyInstance) {
     method: 'PATCH',
     url: '/recipes/:id',
     schema: {
-      description: 'Edit a recipe (title, servings, status).',
+      description:
+        'Edit a recipe\'s title, servings, status, or your own notes (`myNotes`, ' +
+        'free text, kept when the recipe is read again). To change the ingredients, ' +
+        'method or the recipe\'s notes, use /recipes/{id}/revise.',
       tags: ['recipes'],
       params: z.object({ id: z.coerce.number() }),
       body: z.object({
         title: z.string().optional(),
         servings: z.number().nullish(),
         status: z.enum(['needs_review', 'active', 'archived']).optional(),
+        myNotes: z.string().nullish(),
       }),
     },
     handler: async (req) => {

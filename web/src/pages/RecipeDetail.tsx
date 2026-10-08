@@ -1,15 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { del, patch, post, useFetch } from '../api'
+import { MyNotes } from '../components/MyNotes'
 import { RecipeChat } from '../components/RecipeChat'
+import { RecipeEditor } from '../components/RecipeEditor'
 import { RecipeImage } from '../components/RecipeImage'
-import { IngredientLine, noteNumbers, RecipeNotes } from '../components/RecipeText'
-import type { IngredientCheck, Recipe, RecipeIngredient, RecipeMatch } from '../types'
+import { IngredientLine, noteNumbers, RecipeNotes, StepText } from '../components/RecipeText'
+import type {
+  IngredientCheck,
+  Recipe,
+  RecipeIngredient,
+  RecipeMatch,
+  StepSegment,
+} from '../types'
 
 type Payload = {
   recipe: Recipe
   match: RecipeMatch | null
   ingredients: RecipeIngredient[]
+  steps: StepSegment[][]
 }
 
 const SOURCE_WORD: Record<string, string> = {
@@ -35,6 +44,13 @@ export function RecipeDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [listed, setListed] = useState(false)
+  const [editing, setEditingState] = useState(false)
+  // The Edit button is at the bottom of a long page; the editor starts at the
+  // top. Either way round, land at the top.
+  const setEditing = (on: boolean) => {
+    setEditingState(on)
+    window.scrollTo(0, 0)
+  }
   const [confirmReread, setConfirmReread] = useState(false)
   const [rereading, setRereading] = useState(false)
   const [rereadNote, setRereadNote] = useState<string | null>(null)
@@ -108,6 +124,25 @@ export function RecipeDetail() {
   const checkByIngredient = new Map(
     (match?.checks ?? []).map((c) => [c.ingredientId, c]),
   )
+  if (editing) {
+    return (
+      <main className="page">
+        <button className="back" onClick={() => setEditing(false)}>
+          ‹ Back to the recipe
+        </button>
+        <RecipeEditor
+          recipe={recipe}
+          ingredients={ingredients}
+          onCancel={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false)
+            reload()
+          }}
+        />
+      </main>
+    )
+  }
+
   const notesByNumber = noteNumbers(recipe.notes)
   const anyEstimate = ingredients.some((i) => i.display.estimate)
 
@@ -301,7 +336,12 @@ export function RecipeDetail() {
                 <ol style={{ paddingLeft: '1.1rem' }}>
                   {recipe.instructions.map((step, i) => (
                     <li key={i} style={{ marginBottom: '0.75rem' }}>
-                      {step}
+                      <StepText
+                        text={step}
+                        segments={data.steps?.[i]}
+                        ingredients={ingredients}
+                        notes={notesByNumber}
+                      />
                     </li>
                   ))}
                 </ol>
@@ -309,9 +349,12 @@ export function RecipeDetail() {
             </section>
           )}
 
+          {/* Yours first: it's what you learned last time you made it. */}
+          <MyNotes recipeId={recipe.id} value={recipe.myNotes} onSaved={reload} />
+
           {recipe.notes.length > 0 && (
             <section className="section">
-              <div className="section-label">Notes</div>
+              <div className="section-label">Recipe notes</div>
               <RecipeNotes notes={recipe.notes} />
             </section>
           )}
@@ -322,6 +365,12 @@ export function RecipeDetail() {
 
       {/* Housekeeping, kept apart from the recipe and from each other. */}
       <div className="detail-foot">
+        <div>
+          <button className="btn ghost block" onClick={() => setEditing(true)}>
+            Edit recipe
+          </button>
+        </div>
+
         <div>
           {confirmReread ? (
             <div className="btn-row">
@@ -343,9 +392,10 @@ export function RecipeDetail() {
           )}
           {confirmReread && (
             <p className="sub note">
-              Replaces the ingredients, method and notes with a fresh read of the{' '}
-              {SOURCE_WORD[recipe.sourceType] ?? 'source'}, including anything you
-              changed with the chat. Pantry matches you fixed are remembered.
+              Replaces the ingredients, method and recipe notes with a fresh read of
+              the {SOURCE_WORD[recipe.sourceType] ?? 'source'}, including any edits
+              you made here or with the chat. My notes and the pantry matches you
+              fixed are kept.
             </p>
           )}
           {rereadNote && <p className="sub note">{rereadNote}</p>}

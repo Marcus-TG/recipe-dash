@@ -57,6 +57,13 @@
       "when": 1791385498378,
       "tag": "0007_long_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791386865359,
+      "tag": "0008_greedy_the_liberteens",
+      "breakpoints": true
     }
   ]
 }

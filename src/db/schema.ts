@@ -182,6 +182,9 @@ export const recipes = sqliteTable('recipes', {
     .notNull()
     .default(sql`'[]'`)
     .$type<string[]>(),
+  // Yours, not the author's: "used 1.5× garlic", "needs 5 more minutes".
+  // Reading the recipe again replaces everything else and never this.
+  myNotes: text('my_notes'),
   rawSource: text('raw_source'),
   status: text('status').notNull().default('needs_review'), // needs_review|active|archived|pending_parse|parse_failed
   imageUrl: text('image_url'), // where it came from

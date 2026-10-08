@@ -394,6 +394,7 @@ function readAmounts(line: string): { m: Measure; alt: Measure | null; rest: str
 export function describeIngredient(
   raw: string,
   density?: Density | null,
+  cupMl: number = US_CUP_ML,
 ): IngredientDisplay {
   const line = raw.replace(/\s+/g, ' ').trim()
   const read = readAmounts(line)
@@ -419,7 +420,7 @@ export function describeIngredient(
   // "5 cups broccoli (1 large head, ~300g)": the author already said what it
   // weighs, in their own words. An estimate beside it would argue with them.
   const authorWeighed = /\d\s*(?:g|kg|grams?|ml|oz|ounces?|lbs?)\b/i.test(rest)
-  const estimated = exact || authorWeighed ? null : estimateMetric(m, density)
+  const estimated = exact || authorWeighed ? null : estimateMetric(m, density, cupMl)
   return {
     amount: writeMeasure(m),
     metric: exact ?? estimated,
@@ -428,20 +429,59 @@ export function describeIngredient(
   }
 }
 
+// A cup isn't one size. The US cup is 236.6 ml; Australia, New Zealand and
+// Canada use a 250 ml metric cup — RecipeTin Eats among them. Treating hers
+// as a US cup made every weight learned from her recipes 6% heavy.
+export const US_CUP_ML = 236.588
+export const METRIC_CUP_ML = 250
+
+const isCup = (unit: string | null) => unit === 'cup' || unit === 'cups'
+
+/** Millilitres for a measure, with cups at this recipe's cup size. */
+function toMl(m: Measure, cupMl: number): number | null {
+  if (m.quantity == null) return null
+  if (isCup(m.unit)) return m.quantity * cupMl
+  const base = toBase(m.quantity, m.unit)
+  return base?.family === 'volume' ? base.quantityBase : null
+}
+
+/**
+ * The cup a recipe uses, read off its own lines: "2 cups (500 ml) milk" is a
+ * 250 ml cup. Null when no line says — then it's whatever its site uses, or
+ * a US cup.
+ */
+export function recipeCupMl(lines: string[]): number | null {
+  const ratios: number[] = []
+  for (const raw of lines) {
+    const read = readAmounts(raw.replace(/\s+/g, ' ').trim())
+    if (!read?.alt) continue
+    const [cup, other] = isCup(read.m.unit) ? [read.m, read.alt] : [read.alt, read.m]
+    if (!isCup(cup.unit) || !cup.quantity) continue
+    const ml = toBase(other.quantity, other.unit)
+    if (ml?.family === 'volume') ratios.push(ml.quantityBase / cup.quantity)
+  }
+  if (ratios.length === 0) return null
+  const typical = ratios.sort((a, b) => a - b)[Math.floor(ratios.length / 2)]!
+  return typical >= 245 ? METRIC_CUP_ML : US_CUP_ML
+}
+
 /**
  * The recipe author's own pair, when a line has a volume and a weight side
  * by side — "1/3 cup (50 g) flour". That's a measurement of the ingredient's
- * density, and weights.ts learns from it.
+ * density, and weights.ts learns from it. Cups count at the recipe's cup size.
  */
-export function authorPair(raw: string): { ml: number; grams: number } | null {
+export function authorPair(
+  raw: string,
+  cupMl: number = US_CUP_ML,
+): { ml: number; grams: number } | null {
   const read = readAmounts(raw.replace(/\s+/g, ' ').trim())
   if (!read?.alt) return null
-  const a = toBase(read.m.quantity, read.m.unit)
-  const b = toBase(read.alt.quantity, read.alt.unit)
-  if (!a || !b) return null
-  if (a.family === 'volume' && b.family === 'mass') return { ml: a.quantityBase, grams: b.quantityBase }
-  if (a.family === 'mass' && b.family === 'volume') return { ml: b.quantityBase, grams: a.quantityBase }
-  return null
+  const [vol, mass] =
+    unitFamily(read.m.unit) === 'volume' ? [read.m, read.alt] : [read.alt, read.m]
+  if (unitFamily(vol.unit) !== 'volume' || unitFamily(mass.unit) !== 'mass') return null
+  const ml = toMl(vol, cupMl)
+  const grams = toBase(mass.quantity, mass.unit)?.quantityBase
+  return ml && grams ? { ml, grams } : null
 }
 
 // Below a tablespoon, or under 5 g, a scale reading isn't worth having: the
@@ -450,11 +490,17 @@ const SMALLEST_ESTIMATE_ML = 14.7
 const SMALLEST_ESTIMATE_G = 5
 
 /** "≈ 125 g" for "1 cup flour", given a density from measured data. */
-function estimateMetric(m: Measure, density: Density | null | undefined): string | null {
+function estimateMetric(
+  m: Measure,
+  density: Density | null | undefined,
+  cupMl: number,
+): string | null {
   if (!density || !m.number || unitFamily(m.unit) !== 'volume') return null
-  const ends = m.number.split(/\s*[-–]\s*/).map((part) => toBase(parseNumber(part), m.unit))
-  if (ends.some((e) => !e)) return null
-  const ml = ends.map((e) => e!.quantityBase)
+  const ends = m.number
+    .split(/\s*[-–]\s*/)
+    .map((part) => toMl({ ...m, quantity: parseNumber(part) }, cupMl))
+  if (ends.some((e) => e == null)) return null
+  const ml = ends as number[]
   if (ml[0]! < SMALLEST_ESTIMATE_ML) return null
   const grams = ml.map((v) => v * density.gPerMl)
   if (grams[0]! < SMALLEST_ESTIMATE_G) return null

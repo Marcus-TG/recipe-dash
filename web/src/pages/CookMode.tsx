@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { post, useFetch } from '../api'
-import { IngredientLine, noteNumbers, RecipeNotes } from '../components/RecipeText'
-import type { Recipe, RecipeIngredient } from '../types'
+import { IngredientLine, noteNumbers, RecipeNotes, StepText } from '../components/RecipeText'
+import type { Recipe, RecipeIngredient, StepSegment } from '../types'
 import { useKeepAwake } from '../useKeepAwake'
 
-type Payload = { recipe: Recipe; ingredients: RecipeIngredient[] }
+type Payload = { recipe: Recipe; ingredients: RecipeIngredient[]; steps: StepSegment[][] }
 
 /**
  * Full-screen, huge type, screen stays on, prev/next as bottom thumb zones.
@@ -69,7 +69,18 @@ export function CookMode() {
                 </p>
               </div>
             ))}
-            {/* Read before starting: "any potato works", "Note 1" for the line above. */}
+            {/* Read before starting: what you learned last time, then the
+                author's "any potato works" and "Note 1". */}
+            {data.recipe.myNotes && (
+              <>
+                <div className="ing-section" style={{ marginTop: '1.5rem' }}>
+                  My notes
+                </div>
+                <div className="card notes">
+                  <p className="my-notes-text">{data.recipe.myNotes}</p>
+                </div>
+              </>
+            )}
             {data.recipe.notes.length > 0 && (
               <>
                 <div className="ing-section" style={{ marginTop: '1.5rem' }}>
@@ -80,7 +91,15 @@ export function CookMode() {
             )}
           </div>
         ) : (
-          <p>{steps[step]}</p>
+          <p>
+            <StepText
+              text={steps[step]!}
+              segments={data.steps?.[step]}
+              ingredients={data.ingredients}
+              // The notes live on the ingredients page, not on a step.
+              notes={new Set()}
+            />
+          </p>
         )}
       </div>
 

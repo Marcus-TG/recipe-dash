@@ -928,7 +928,10 @@ export async function chatAboutRecipe(
     `Method:\n${recipe.instructions.map((s, n) => `${n + 1}. ${s}`).join('\n')}\n\n` +
     (recipe.notes.length > 0
       ? `Notes:\n${recipe.notes.map((n) => `- ${n}`).join('\n')}\n\n`
-      : '')
+      : '') +
+    // What they found last time they made it — worth knowing before
+    // suggesting anything.
+    (recipe.myNotes ? `THE COOK'S OWN NOTES ON THIS RECIPE:\n${recipe.myNotes}\n\n` : '')
 
   const intent = await structured({
     schema: ChatIntent,

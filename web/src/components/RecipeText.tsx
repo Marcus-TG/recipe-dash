@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { IngredientDisplay } from '../types'
+import type { IngredientDisplay, RecipeIngredient, StepSegment } from '../types'
 
 // "1. Potato – any potato works": the author's own number, kept, because
 // ingredient lines refer to it ("cubed (Note 1)").
@@ -69,10 +69,14 @@ export function IngredientLine({
   const { amount, metric, estimate, text, note } = display
   return (
     <>
-      {amount && <span className="ing-amount">{amount}</span>}
+      {/* Real spaces between the parts, not just margins, so copied text and
+          screen readers get "1 cup 90 g frozen peas", not "1 cup90 g". */}
+      {amount && <span className="ing-amount">{amount}</span>}{' '}
       {metric && (
-        <span className={`ing-metric${estimate ? ' est' : ''}`}>{metric}</span>
-      )}{' '}
+        <>
+          <span className={`ing-metric${estimate ? ' est' : ''}`}>{metric}</span>{' '}
+        </>
+      )}
       {withNoteRefs(text, notes)}
       {note && (
         <span className="ing-note">
@@ -80,6 +84,48 @@ export function IngredientLine({
           {withNoteRefs(note, notes)}
         </span>
       )}
+    </>
+  )
+}
+
+/**
+ * A method step with each ingredient's amount where it goes in: "Melt butter
+ * [3 tbsp · 40 g] in a large pot". The amount is set apart from the
+ * author's words, because it's ours, not theirs.
+ */
+export function StepText({
+  segments,
+  text,
+  ingredients,
+  notes,
+}: {
+  segments: StepSegment[] | undefined
+  text: string
+  ingredients: RecipeIngredient[]
+  // "Read Note 4 regarding shelf positions" links like an ingredient line does.
+  notes: Set<number>
+}) {
+  if (!segments) return <>{withNoteRefs(text, notes)}</>
+  return (
+    <>
+      {segments.map((seg, i) => {
+        const ing = seg.ingredientId
+          ? ingredients.find((x) => x.id === seg.ingredientId)
+          : undefined
+        if (!ing?.display.amount) return <span key={i}>{withNoteRefs(seg.text, notes)}</span>
+        const { amount, metric, estimate } = ing.display
+        return (
+          <span key={i}>
+            {seg.text}{' '}
+            <span className="step-amt">
+              {amount}
+              {metric && (
+                <span className={estimate ? 'est' : 'scale'}> · {metric}</span>
+              )}
+            </span>
+          </span>
+        )
+      })}
     </>
   )
 }

@@ -144,15 +144,25 @@ weight is:
    "1½ cups flour (6.75 ounces)" — moved to the same place on every line.
 2. **Exact arithmetic** inside one family — pounds and ounces to grams.
 3. **An estimate from measured data, marked "≈"**, that says where it came
-   from when tapped. Never a model's guess. The sources, closest to home
-   first: a density set on the pantry item; recipe authors in this library
-   who weighed the same ingredient (every "1/3 cup (50 g) flour" is a
-   measurement, learned at read time, the way aliases learn from receipts);
-   USDA's measured cup weights (`src/domain/cup-weights.ts`, generated from
-   the public-domain SR Legacy data by `scripts/build-cup-weights.ts`, every
-   figure tagged with its USDA record). Your library outranks USDA only once
-   two of its recipes agree — one author's rounded "3 tbsp = 40 g" shouldn't
-   overrule a lab — but for something USDA doesn't list, one recipe will do.
+   from when tapped. Never a model's guess. The sources, in order: a density
+   set on the pantry item; **the same site's** own weights for that ingredient
+   (every "1/3 cup (50 g) flour" is the author measuring, learned at read
+   time, the way aliases learn from receipts); USDA's measured cup weights
+   (`src/domain/cup-weights.ts`, generated from the public-domain SR Legacy
+   data by `scripts/build-cup-weights.ts`, every figure tagged with its USDA
+   record); and other sites' weights only for what USDA doesn't list.
+
+**An author's weight is a fact about that author's cups, not about the
+food.** RecipeTin Eats fills a cup with about 150 g of flour; USDA's US cup
+holds 125 g. Both are right, and letting the first leak into a US cake
+recipe puts 20% too much flour in it — so a site's weights are used for that
+site's recipes and nobody else's. Part of that gap is the cup itself:
+Australia, New Zealand and Canada use a 250 ml cup, the US 236.6 ml. A
+recipe's cup is read off its own lines ("2 cups (500 ml) milk" is a 250 ml
+cup), else taken from its site's other recipes, else assumed US — and every
+cup counts at that size, both when learning from a line and when estimating
+one. Cups-only recipes stay inherently approximate for baking (how the
+author filled the cup is unknowable); the "≈" is there to say so.
 
 No estimate is shown when it would mislead: under a tablespoon or 5 g (the
 spoon is the better tool), when the author already wrote a weight on the line
@@ -175,7 +185,8 @@ basil" — and never blocks anything; a multi-part recipe like "polenta bowls"
 stays ONE recipe, with "For the pico:" headings folded into a `section` label
 on the lines beneath rather than stored as rows — one meal, one cook, one
 shopping trip; a recipe also keeps the card's own `notes` — "Note 1: any
-potato works" — which is not the blog story, still thrown away),
+potato works" — which is not the blog story, still thrown away — and the
+cook's own `my_notes`, which nothing but the cook ever writes),
 `cook_sessions` + lines, `llm_jobs`
 (queue with retry/backoff), `settings` (Paperless cursor, tag id).
 
@@ -309,6 +320,32 @@ fixed survive in the alias table. Cook history keeps its own label and item
 and only loses its link to the old ingredient row; before this, replacing the
 ingredients of any recipe you'd cooked failed on that foreign key, chat
 revisions included.
+
+**Editing is plain text, on purpose.** Edit mode turns the recipe into text
+boxes — ingredients one per line, steps and notes each on their own line —
+saved in one go through the same path a chat revision takes, so the pantry
+is re-matched and hand-fixed matches survive. Plain text handles a one-word
+fix and a rewrite the same way, and it's the format the importer already
+reads: "1/3 cup (50 g) flour" typed by hand gets its grams beside the cup, and
+"For the frosting:" starts a group, exactly like an imported line.
+
+**Amounts go where the method uses them.** "Melt butter in a large pot"
+reads "Melt butter [3 tbsp · 40 g] in a large pot", most of all for cook
+mode's one-step-at-a-time screen. It's matched by the food words — never a
+model — at the first place each ingredient goes in, and derived on read like
+everything else here, so edits to either list keep it right. It stays out
+whenever it would mislead: when the step already says how much ("add 1/2 cup
+of milk", "half the butter"), when a word could be either of two ingredients
+("the sugars" with white and brown both listed), when the word is a verb
+("cream the butter", "before frosting"), and for "divided" ingredients, whose
+amount is split across steps. A missing amount costs a glance at the list; a
+wrong one costs the dish.
+
+**My notes are the one thing a re-read never touches.** Edits to the recipe
+itself are replaced by a re-read (it says so first); what you learned making
+it — "1½× the garlic", "5 more minutes" — lives in its own field, shows first
+in the notes and on cook mode's ingredient page, and goes to the chat as
+context.
 
 **Chat:** each recipe has an ask box for substitutions, scaling, and
 technique, with the pantry in the prompt so "what can I swap?" has a useful

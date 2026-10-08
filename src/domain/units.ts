@@ -69,6 +69,7 @@ const UNITS: Record<string, { family: UnitFamily; toBase: number }> = {
   stalk: { family: 'count', toBase: 1 },
   stick: { family: 'count', toBase: 1 },
   dozen: { family: 'count', toBase: 12 },
+  batch: { family: 'count', toBase: 1 }, // 1½ batches of buttercream
   large: { family: 'count', toBase: 1 },
   medium: { family: 'count', toBase: 1 },
   small: { family: 'count', toBase: 1 },
